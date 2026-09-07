@@ -1,0 +1,14 @@
+rows = 20000
+amount_width_bits = 64
+amount_real_values = 20000
+amount_padded_values = 32768
+amount_padded_bit_values = 2097152
+side_width_bits = 32
+side_real_values = 40000
+side_padded_values = 65536
+side_padded_bit_values = 2097152
+full_real_values = 60000
+full_padded_bit_values = 4194304
+proof_size_each_B = 1678
+proof_size_total_B = 3356
+proof_size_B_per_row = 0.1678

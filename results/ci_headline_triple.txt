@@ -1,0 +1,39 @@
+====================================================================================================
+PAPER A -- HEADLINE CLUSTERING TABLE UNDER THE DEPLOYED OBSERVABLE (m=300, K=9700, 400 tx types)
+====================================================================================================
+  alias  = oracle: node identity is the alias (what tab:ari measured)
+  triple = deployed: node identity is the (alias, c, d) equality class = ciphertext equality under one tweak
+  delta  = triple - alias, PAIRED over seeds (same worlds, same rows); budget 0.05 read on the triple's upper end
+
+    occ attack              n |    ARI alias (95%)   ARI triple (95%)   delta (paired 95%) |    nodes    upper  verdict
+  ----------------------------------------------------------------------------------------------------------------------
+    0.5 weak (MB,32,r1)     5 |   0.0080 +/- 0.0020   0.0001 +/- 0.0005   -0.0079 +/- 0.0017 |     4771   0.0005  safe   [67s]
+        per-seed alias : 0.0089 0.0076 0.0062 0.0103 0.0070
+        per-seed triple: 0.0003 -0.0000 0.0001 0.0005 -0.0005
+    1.0 weak (MB,32,r1)     5 |   0.0336 +/- 0.0089   0.0004 +/- 0.0003   -0.0332 +/- 0.0090 |     9391   0.0007  safe   [32s]
+        per-seed alias : 0.0240 0.0287 0.0396 0.0349 0.0407
+        per-seed triple: 0.0005 0.0004 0.0005 0.0005 -0.0000
+    2.0 weak (MB,32,r1)     5 |   0.1609 +/- 0.0290   0.0005 +/- 0.0004   -0.1604 +/- 0.0287 |    18155   0.0009  safe   [49s]
+        per-seed alias : 0.1704 0.1720 0.1281 0.1468 0.1871
+        per-seed triple: 0.0010 0.0006 0.0002 0.0003 0.0006
+    4.0 weak (MB,32,r1)     5 |   0.2749 +/- 0.0180   0.0005 +/- 0.0002   -0.2745 +/- 0.0181 |    34031   0.0006  safe   [55s]
+        per-seed alias : 0.2544 0.2695 0.2732 0.2894 0.2882
+        per-seed triple: 0.0007 0.0005 0.0004 0.0005 0.0003
+    1.0 strong (KM,64,r3)   5 |   0.0258 +/- 0.0083   0.0002 +/- 0.0007   -0.0256 +/- 0.0088 |     9391   0.0009  safe   [126s]
+        per-seed alias : 0.0194 0.0276 0.0364 0.0248 0.0210
+        per-seed triple: 0.0002 0.0003 -0.0007 0.0008 0.0004
+    2.0 strong (KM,64,r3)   5 |   0.2333 +/- 0.0801   0.0006 +/- 0.0002   -0.2328 +/- 0.0801 |    18155   0.0008  safe   [328s]
+        per-seed alias : 0.1470 0.3008 0.2004 0.2923 0.2262
+        per-seed triple: 0.0006 0.0004 0.0007 0.0007 0.0004
+   16.0 weak (MB,32,r1)     5 |   0.3205 +/- 0.0110   0.0106 +/- 0.0025   -0.3098 +/- 0.0117 |    95215   0.0131  safe   [224s]
+        per-seed alias : 0.3137 0.3276 0.3173 0.3319 0.3118
+        per-seed triple: 0.0120 0.0126 0.0115 0.0080 0.0091
+  103.0 weak (MB,32,r1)     5 |   0.3568 +/- 0.0173   0.3489 +/- 0.0579   -0.0080 +/- 0.0468 |   145035   0.4068  over budget   [290s]
+        per-seed alias : 0.3554 0.3489 0.3391 0.3740 0.3668
+        per-seed triple: 0.3285 0.3421 0.3144 0.4305 0.3288
+  103.0 strong (KM,64,r3)   3 |   0.5484 +/- 0.4554   0.4856 +/- 0.4423   -0.0628 +/- 0.0702 |   145061   0.9279  over budget   [829s]
+        per-seed alias : 0.4465 0.7600 0.4386
+        per-seed triple: 0.4154 0.6881 0.3533
+
+  negative delta in every cell => the alias-only tables are an oracle upper bound on the deployed adversary
+done

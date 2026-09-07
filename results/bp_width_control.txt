@@ -1,0 +1,17 @@
+==============================================================================
+BIT-WIDTH CONTROL -- equal n*m, different (n, m)
+==============================================================================
+     n     m     n*m   prove(s)  verify(s)   size(B)   sound?
+    32     2      64       0.88       0.52       688      yes
+    64     1      64       0.87       0.52       688      yes
+     -> n*m=64: prove differs by 0.8%, size identical (688 B)
+    32    32   1,024      11.09       6.01       952      yes
+    64    16   1,024      10.36       5.81       952      yes
+     -> n*m=1,024: prove differs by 7.1%, size identical (952 B)
+
+  largest prover-time difference across the pairs : 7.1%
+  proof size is a function of n*m alone           : True
+
+  Cost therefore depends on the number of committed bits, not on how
+  those bits are split between width and aggregation. The n=64 sweep
+  of tab:bp is read at the deployed n=32 by doubling m.

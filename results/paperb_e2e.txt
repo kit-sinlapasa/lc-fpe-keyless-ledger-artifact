@@ -1,0 +1,8 @@
+  honest end-to-end path accepts                       : True
+  one record list reproduces anchor root and chain     : True
+  tampered record is rejected                          : True
+  past beacon round is rejected                        : True
+  anchor after beacon opening time is rejected         : True
+  wrong sampled row is rejected                        : True
+  anchored understated side is rejected                : True
+  all checks pass                                     : True

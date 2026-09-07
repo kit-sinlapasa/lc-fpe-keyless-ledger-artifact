@@ -1,0 +1,15 @@
+====================================================================================
+OBSERVABLE: alias alone  vs  full (alias, c, d) triple
+====================================================================================
+  ARI of recovering the ACCOUNT, same ledger, same attack
+
+    docs  aliases   triples     occ | ARI alias ARI triple     delta
+   5,000     2000      5668     5.0 |     0.301     0.046    -0.255   (cc x dt = 2x2)
+   5,000     2000      8541     5.0 |     0.304     0.001    -0.303   (cc x dt = 5x3)
+  15,000     2000      7776    15.0 |     0.491     0.241    -0.249   (cc x dt = 2x2)
+  15,000     2000     18947    15.0 |     0.468     0.005    -0.464   (cc x dt = 5x3)
+  40,000     2000      7996    40.0 |     0.569     0.392    -0.177   (cc x dt = 2x2)
+  40,000     2000     27926    40.0 |     0.561     0.163    -0.398   (cc x dt = 5x3)
+
+  positive delta => the deployed observable is WORSE for us than what
+  we simulated, i.e. the manuscript's 'conservative' claim is false.

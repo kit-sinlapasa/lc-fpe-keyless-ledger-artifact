@@ -1,0 +1,34 @@
+==========================================================================
+CAN A DISTANCE BOUND CARRY TO N OBSERVATIONS?
+==========================================================================
+  A ledger period is N rows, so the adversary sees N draws from the
+  alias-class distribution, not one. Both standard routes from a
+  per-draw distance to an N-draw advantage are computed below.
+
+  operating point        m=300 K'=10000 N=20000
+     Delta = TV(p,u)                 : 0.004492
+     KL(p||u)                        : 0.002242
+     subadditivity bound  N*Delta    : 89.8   vacuous (>= 1)
+     Pinsker bound  sqrt(N*KL/2)     : 4.7   vacuous (>= 1)
+     rows the bounds survive to      : 223 (subadd), 892 (Pinsker)
+
+  variant                m=200 K'=10000 N=20000
+     Delta = TV(p,u)                 : 0.002700
+     KL(p||u)                        : 0.000645
+     subadditivity bound  N*Delta    : 54.0   vacuous (>= 1)
+     Pinsker bound  sqrt(N*KL/2)     : 2.5   vacuous (>= 1)
+     rows the bounds survive to      : 370 (subadd), 3103 (Pinsker)
+
+  variant                m=300 K'=10000 N=1000
+     Delta = TV(p,u)                 : 0.004492
+     KL(p||u)                        : 0.002242
+     subadditivity bound  N*Delta    : 4.5   vacuous (>= 1)
+     Pinsker bound  sqrt(N*KL/2)     : 1.1   vacuous (>= 1)
+     rows the bounds survive to      : 223 (subadd), 892 (Pinsker)
+
+==========================================================================
+  Both bounds exceed 1 at every point measured. A per-draw distance
+  does not carry to a period of this length, so the theorem would
+  be vacuous exactly where the paper needs it. This is a reason not
+  to write it, and a reason the operating rule is measured instead.
+  done

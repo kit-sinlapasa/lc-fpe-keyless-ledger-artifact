@@ -1,0 +1,40 @@
+==============================================================================
+PAPER B PRIMITIVES -- tamper-evident ledger, 20,000 rows
+==============================================================================
+  hash chain build      :   0.022 s   (1.1 us/row)
+  Merkle build          :   0.067 s   (3.3 us/row), depth 15
+  period-close anchor   :   3.916 ms  firm-signed 199 B; with custodian receipt 271 B  (per PERIOD, not row)
+  anchor with a different beacon round verifies: False  (expected False)
+  inclusion proof       :    14.6 us gen, 35.5 us verify, 480 B each
+  all 200 proofs verify   : True
+  selective disclosure of 200 rows: 134.4 KB total  (208 B row + 480 B path each)
+
+  TAMPER TESTS
+   modify 1 row  -> chain head differs : True
+   modify 1 row  -> Merkle root differs: True
+   anchor signature still verifies     : False  (expected False)
+   delete 1 row  -> Merkle root differs: True
+   duplicate last row -> root differs  : True
+   insert 1 row  -> Merkle root differs: True
+   insert 1 row  -> chain head differs : True
+   reorder 2 rows-> Merkle root differs: True
+
+  STORAGE OVERHEAD
+   chain hashes are recomputable and need not be stored
+   anchor: 199 B per period  ->  0.0100 B/row at N=20,000
+
+  RANGE PROOFS: aggregated Bulletproofs vs probabilistic sampling
+   aggregate over      1 amounts:    672 B total  (672.000 B/row)
+   aggregate over  1,000 amounts:  1,312 B total  (1.312 B/row)
+   aggregate over 20,000 amounts:  1,632 B total  (0.082 B/row)
+   sampling instead: a wraparound forgery needs only ~2 corrupted rows;
+     sampling   100 of 20,000 rows detects it with p = 1.0%
+     sampling   200 of 20,000 rows detects it with p = 2.0%
+     sampling  1000 of 20,000 rows detects it with p = 9.5%
+
+  KEYLESS BALANCE over real commitments (N = 20,000)
+   build 20,000 commitments :  31.377 s  (writer, once per period)
+   verify sum C == N*Omega*G + R*H :   0.071 s   holds: True
+   the same check against a ledger off by one unit : True  (must be True)
+     arithmetic only; sound verification adds the range-proof
+     verification, which we do not measure at this size

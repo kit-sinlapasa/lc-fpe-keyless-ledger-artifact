@@ -1,0 +1,15 @@
+==============================================================================
+FF1 KNOWN-ANSWER TEST against the NIST SP 800-38G sample values
+==============================================================================
+  #   key        radix ciphertext             encrypt    decrypt
+  1   AES-128       10 2433477484             ok         ok
+  2   AES-128       10 6124200773             ok         ok
+  3   AES-128       36 a9tv40mll9kdu509eum    ok         ok
+  4   AES-192       10 2830668132             ok         ok
+  5   AES-192       10 2496655549             ok         ok
+  6   AES-192       36 xbj3kv35jrawxv32ysr    ok         ok
+  7   AES-256       10 6657667009             ok         ok
+  8   AES-256       10 1001623463             ok         ok
+  9   AES-256       36 xs8a0azh2avyalyzuwd    ok         ok
+
+  9 of 9 samples reproduced

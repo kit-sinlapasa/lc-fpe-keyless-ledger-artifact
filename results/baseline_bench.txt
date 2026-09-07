@@ -1,0 +1,30 @@
+============================================================================================
+BASELINE COMPARISON   ledger = 20,000 rows, 200 accounts, 32 B/row plaintext
+  Windows-10-10.0.26200-SP0 | Python 3.11.15 | AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD
+  warm-up + 20 reps (fast schemes) / 5 reps (LC-FPE); median and p95
+============================================================================================
+
+  scheme                      B/row  encrypt med/p95 s  trial bal med/p95      close med/p95  keyless
+  ----------------------------------------------------------------------------------------------------
+  Plaintext                      32        0.000/0.000        0.005/0.005        0.002/0.002      ---
+  AES-256-XTS (whole DB)         32        0.000/0.001        0.004/0.005        0.004/0.005       no
+  AES-256-GCM (per record)       60        0.022/0.025        0.024/0.024        0.024/0.024       no
+  Per-field FF1 (4 digits)       32        3.665/3.734                n/a                n/a       no
+  LC-FPE (ours)                  91      20.181/21.103                n/a        0.054/0.054      yes
+
+  CHECKS
+   XTS decrypt == plaintext, one tweak both ways   : True
+   GCM decrypt == plaintext for all rows           : True
+   per-field FF1 round trip (spot-checked)         : True
+   LC-FPE full decrypt round trip, 20,000 rows        : True  (4.4 s)
+   LC-FPE keyless close  sum C == N*Omega*G + R*H  : True
+   amount ciphertext moved to another row          : False  (expected False)
+   commitment replaced, ciphertexts untouched      : True  (expected True)
+     (no AEAD tag is forged in that attack; Dec catches it by
+      recomputing C from the RowID-derived rho and the amount)
+   RowID registry rejects a duplicate              : True
+   LC-FPE bytes/row = 9 fmt + 33 C + 24 amt AEAD + 25 text AEAD (nonces derived)
+
+  LC-FPE encrypt 20.2 s median = 991 rows/s; 898x AES-GCM; 2.8x plaintext bytes
+  LaTeX rows written to ..\results\tab_base_rows.tex
+done

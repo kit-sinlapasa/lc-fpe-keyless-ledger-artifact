@@ -1,0 +1,34 @@
+==============================================================================
+PARTITION-BATCH COST LADDER -- n=32
+==============================================================================
+  The side-proof batch has 40,000 real values (20,000 rows x D_i, K_i)
+  and pads to m=65,536. The separate C_i batch uses n=64, m=32,768,
+  and therefore has the same n*m. The full verifier runs both batches.
+  memory model: 420 B/point measured, transients 0.9x the generator
+  table, 30 MB baseline, 150 MB cushion. Available now: 1573 MB.
+
+        m        n*m  setup(s)    prove(s)   verify(s)   size(B)   sound?   peakRSS
+    1,024     32,768      13.3       264.4       147.3     1,282      yes       69M
+    4,096    131,072      51.7      1156.3       635.4     1,414      yes      106M
+       -> vs m=1,024: n*m x4, prove x4.37, verify x4.31, k=17
+    8,192    262,144     113.2      2698.0      1524.8     1,480      yes      223M
+       -> vs m=4,096: n*m x2, prove x2.33, verify x2.40, k=18
+
+  RESUMED at m=16384 with the memory model refitted to the rungs above
+  memory model: 57 MB + 197 B per generator, x1.5, 200 MB cushion.
+  available now: 1357 MB.
+
+        m        n*m  setup(s)    prove(s)   verify(s)   size(B)   sound?   peakRSS
+   16,384    524,288     246.9      4867.6      2854.4     1,546      yes      181M
+
+  Ladder stopped here deliberately, not by the guard.
+  The peakRSS column above is sampled after prove() returns, so it
+  understates the true high-water mark: this rung was modelled at
+  457 MB and the live process peaked near 1167 MB. Refitting on the
+  honest figure puts m=32,768 near 2.6 GB and the padded partition
+  near 5.7 GB, against roughly 1.5 GB free on this machine. A rung
+  started without room measures the page file, not the prover, so the
+  ladder ends at the largest size this machine can hold.
+
+  reached m=16384 (n*m=524288)
+  done

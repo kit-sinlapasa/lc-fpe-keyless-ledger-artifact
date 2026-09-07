@@ -1,0 +1,7 @@
+DECISIVE: does the stronger adversary break the occupancy rule?
+   occ attack                               ARI (95% CI)  upper  verdict
+   1.0 weak  (MiniBatch,32,r1)        0.0336 +/- 0.0089  0.0424  SAFE   [18s]
+   1.0 STRONG(full KM,  64,r3)        0.0258 +/- 0.0083  0.0341  SAFE   [103s]
+   2.0 weak  (MiniBatch,32,r1)        0.1609 +/- 0.0290  0.1899  *** BUDGET EXCEEDED ***   [24s]
+   2.0 STRONG(full KM,  64,r3)        0.2333 +/- 0.0801  0.3134  *** BUDGET EXCEEDED ***   [59s]
+done

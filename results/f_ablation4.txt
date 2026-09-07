@@ -1,0 +1,22 @@
+==============================================================================================
+F. ABLATION -- row recovery by an adversary who knows (c,d)
+==============================================================================================
+  structured TFRS chart, m=200, three seeds, generative aux, occupancy 1
+
+  synthetic  (100 cc x 10 dt)   accounts per (c,d) cell: 1.9
+  adversary                                  row recovery
+  guess the cell's best account            87.6% +/- 0.9%   <== reads no ciphertext
+  plain                                    93.4% +/- 1.6%   +5.8% vs baseline
+  lift                                     93.0% +/- 2.0%   +5.3% vs baseline
+  FPAE                                     31.7% +/- 6.1%   -55.9% vs baseline
+  LC-FPE                                   31.7% +/- 6.3%   -56.0% vs baseline
+
+  realistic  (8 cc x 12 dt)   accounts per (c,d) cell: 15.4
+  adversary                                  row recovery
+  guess the cell's best account            59.4% +/- 2.9%   <== reads no ciphertext
+  plain                                    76.6% +/- 4.7%   +17.2% vs baseline
+  lift                                     76.0% +/- 5.3%   +16.5% vs baseline
+  FPAE                                      2.2% +/- 0.2%   -57.3% vs baseline
+  LC-FPE                                    2.2% +/- 0.2%   -57.2% vs baseline
+
+done

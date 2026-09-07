@@ -1,0 +1,14 @@
+============================================================================
+WEAK FIAT-SHAMIR ATTACK on the aggregated range proof
+============================================================================
+  range is 16 bits, so the honest values 5 and 7 are in range
+  honest proof verifies                     : True
+  forged commitments, FIXED verifier        : False  (rejected: t-check)
+
+  ORIGINAL (weak) prover + ORIGINAL verifier
+    honest commitments                      : True
+    forged commitments (5 + 2^200)          : True  <-- accepted: the flaw
+  same weak proof against the FIXED verifier: False  (rejected)
+  first forged commitment now holds 5 + 2^200, far outside 16 bits
+
+  RESULT: attack fails, the transcript binds the commitments

@@ -1,0 +1,20 @@
+============================================================================
+AGGREGATED BULLETPROOFS -- real implementation, NIST P-256
+============================================================================
+     m   N=n*m   prove(s)  verify(s)   size(B)   formula    B/row
+     1      64       0.46       0.30       688       672   688.00   VERIFIED
+     2     128       0.97       0.54       754       736   377.00   VERIFIED
+     4     256       1.88       1.08       820       800   205.00   VERIFIED
+     8     512       3.92       2.21       886       864   110.75   VERIFIED
+    16    1024       7.77       4.31       952       928    59.50   VERIFIED
+    32    2048      15.05      10.26     1,018       992    31.81   VERIFIED
+    64    4096      30.88      17.62     1,084     1,056    16.94   VERIFIED
+   128    8192      62.64      35.35     1,150     1,120     8.98   VERIFIED
+   256   16384     126.44      78.33     1,216     1,184     4.75   VERIFIED
+
+  SOUNDNESS TESTS (m=2, n=16)
+   honest proof verifies            : True
+   tampered t-hat rejected          : True
+   tampered IPA scalar rejected     : True
+   proof bound to its commitments   : True
+   out-of-range value rejected      : True

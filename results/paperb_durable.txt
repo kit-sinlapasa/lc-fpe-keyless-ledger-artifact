@@ -1,0 +1,14 @@
+==============================================================================
+PAPER B DURABLE END-TO-END PROTOTYPE
+==============================================================================
+  SQLite journal_mode=WAL, synchronous=FULL
+  duplicate RowID rejected                                : True
+  crash before COMMIT rolls close back                    : True
+  second period close rejected                            : True
+  conflicting custodian receipt rejected                  : True
+  restart verifies persisted anchor and full proofs       : True
+  authenticated-beacon sample verifies end to end         : True
+  post-close row tamper rejected                          : True
+  forged beacon rejected                                  : True
+  all checks pass                                      : True
+  scope: durable research prototype, not production ERP

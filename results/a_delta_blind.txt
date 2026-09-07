@@ -1,0 +1,32 @@
+==============================================================================
+DOES Delta PREDICT WHAT THE ADVERSARY RECOVERS?
+==============================================================================
+
+STEP 1  Delta against chart size, both generators, 5 seeds each
+  m       flat Delta     TFRS Delta    
+  150     0.00191        0.00184       
+  200     0.00260        0.00255       
+  250     0.00349        0.00317       
+  300     0.00471        0.00389       
+  350     0.00591        0.00464       
+  400     0.00744        0.00502       
+  450     0.00965        0.00542       
+  500     0.01179        0.00626       
+  600     0.01714        0.00836       
+
+  closest pair: flat m=200 (Delta 0.00260) and TFRS m=200 (Delta 0.00255)
+  they differ by 0.00006, which is 2.2% of the larger
+
+STEP 2  the same attack on the matched pair, occupancy 2.0, 5 seeds
+
+  chart    m      Delta        ARI (95% CI)            
+  flat     200    0.00260      0.1505 +/- 0.0274        [36s]
+  TFRS     200    0.00255      0.0019 +/- 0.0002        [49s]
+
+  Delta differs by 2.2%.  Recovery differs by 81 times.
+
+  Delta alone is a poor predictor for this specified attack at these
+  parameters; this is not an impossibility proof for every bound. What
+  separates them is the co-occurrence structure of the chart, which
+  Delta does not see.
+  done

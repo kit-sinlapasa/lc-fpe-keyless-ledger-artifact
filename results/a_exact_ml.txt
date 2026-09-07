@@ -1,0 +1,27 @@
+================================================================================================================
+PAPER A -- EXACT ML ATTACK IN THE ONE-CELL IID MODEL
+================================================================================================================
+  m=200, 40,000 rows, K=9800, 25 independent worlds
+  exactness follows from sorted class-count/slot-rate matching; no fitted parameters
+  scope: one cell at a time; no cross-cell co-occurrence
+
+  realistic pool (8 cc x 12 dt)
+  cc x dt  N_eff   no-cipher   joint ML count Bayes Bayes - base (95%)     upper
+      1x1    3.1      77.0%     68.1%     77.0%  +0.01% +- 0.02%   +0.03%
+      3x2   13.5      50.4%     28.3%     50.4%  -0.00% +- 0.00%   +0.00%
+      5x3   31.2      37.3%      7.8%     37.3%  +0.00% +- 0.00%   +0.00%
+     10x5   68.3      25.3%      0.5%     25.3%  +0.00% +- 0.00%   +0.00%
+    25x10  104.6      18.6%      0.2%     18.6%  +0.00% +- 0.00%   +0.00%
+
+  sparse pool (100 cc x 10 dt)
+  cc x dt  N_eff   no-cipher   joint ML count Bayes Bayes - base (95%)     upper
+      1x1    1.2      96.6%     95.1%     96.6%  -0.00% +- 0.02%   +0.01%
+      3x2    2.2      84.5%     75.9%     84.5%  +0.00% +- 0.01%   +0.01%
+      5x3    3.9      72.3%     50.7%     72.3%  -0.00% +- 0.00%   +0.00%
+     10x5    8.5      53.8%     10.0%     53.8%  -0.00% +- 0.00%   +0.00%
+    25x10   17.6      31.6%      0.4%     31.6%  +0.00% +- 0.00%   +0.00%
+
+  exact-ML self-checks
+  aligned likelihood dominates a crossed assignment : True
+  base five-seed set is contained in evaluation set  : True
+  done

@@ -1,0 +1,28 @@
+batch=amount bits=64 padded_values=4096 bit_values=262144
+setup_s=4.632
+prove_s=40.131
+verify_s=3.743
+proof_bytes=1440
+expected_proof_bytes=1440
+honest_verify=true
+tampered_proof_rejected=true
+wrong_length_rejected=true
+batch=side bits=32 padded_values=8192 bit_values=262144
+setup_s=5.667
+prove_s=47.592
+verify_s=3.098
+proof_bytes=1440
+expected_proof_bytes=1440
+honest_verify=true
+tampered_proof_rejected=true
+wrong_length_rejected=true
+ledger_rows=4096
+same_record_set_for_both_batches=true
+side_links_verified=4096
+amount_balance_verified=true
+debit_credit_totals_verified=true
+understated_side_rejected=true
+anchor_recomputed=true
+anchored_record_tamper_rejected=true
+peak_rss_mb=322.9
+exit_code=0

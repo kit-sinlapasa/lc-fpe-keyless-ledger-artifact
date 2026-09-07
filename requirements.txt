@@ -1,0 +1,8 @@
+# Versions this artifact was measured with (Python 3.11.15, Windows 11).
+# Later minor versions should reproduce the tables: every experiment seeds its
+# own numpy Generator, and no result depends on library RNG defaults.
+numpy==2.4.6
+scipy==1.17.1
+scikit-learn==1.9.0
+pycryptodome==3.23.0
+cryptography==46.0.7

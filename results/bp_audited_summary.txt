@@ -1,0 +1,9 @@
+source=bp_audited_full.txt
+batches=2
+total_setup_s=79.78
+total_prove_s=676.91
+total_verify_s=55.84
+total_proof_bytes=3264
+proof_bytes_per_row=0.1632
+peak_rss_mb=2523
+all_full_run_checks_passed=true

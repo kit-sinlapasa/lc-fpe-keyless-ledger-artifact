@@ -1,0 +1,65 @@
+================================================================================
+PAPER B, ITEM I -- PUBLIC-COIN SAMPLING
+================================================================================
+  anchor binds R_p, chain head, timestamp and beacon round 1,000,000
+  anchor size: 140 B
+
+  1. UNIFORM SELECTION
+     200 distinct indices drawn from public data : True
+     an independent party derives the same set  : True
+     selection needs no proof and no interaction
+
+  2. GRINDING: how much does re-closing buy the firm?
+     200 of 20,000 rows fraudulent, 200 rows sampled
+     P(a single honest close escapes detection)  : 0.128 +/- 0.010
+     closed form exp(-S|F|/N)                    : 0.135
+     P(escape) after W =   1 re-closes            : 0.128
+     P(escape) after W =   4 re-closes            : 0.422
+     P(escape) after W =  16 re-closes            : 0.889
+     P(escape) after W =  64 re-closes            : 1.000
+     -> grinding is cheap. Unpredictability alone is NOT enough.
+
+     The defence is that the anchor names the beacon round 1,000,000 it will use.
+     Re-closing means signing a second anchor for the same period, and the
+     first is already on deposit with the third party. Grinding is therefore
+     not a cryptographic attack but a visible act of producing two closes.
+     reusing the signature under a different round  : False  (must be False)
+
+  3. MONETARY-UNIT SELECTION over committed amounts
+       side    S      n*m   prove(s)  verify(s)     proof(B)     sound?
+      debit    1       64       0.58       0.33          688        yes
+      debit    2      128       1.24       0.69          754        yes
+      debit    4      256       2.36       1.39          820        yes
+      debit    8      512       4.76       2.78          886        yes
+      debit   16    1,024      10.64       5.93          952        yes
+      debit   32    2,048      19.80      10.15        1,018        yes
+      debit   64    4,096      36.14      18.70        1,084        yes
+      debit  128    8,192      64.39      37.39        1,150        yes
+     credit   16    1,024       8.51       4.84          952        yes
+
+     (0) all 4,096 public per-row C/D/K side links verify : True
+     (b) once-per-period checks, debit and credit side  : True
+         amount +1 is rejected by the once-per-period check : True
+     (a) every opened row: C_i, D_i, K_i open consistently, d_i = max(v_i,0), k_i = max(-v_i,0)
+         a row whose side commitment understates its mass is caught when opened : True
+     both sides sum to the same turnover T = 68,537,980 when the period balances
+     C/D/K total-check counterexample passes global checks      : True
+     same counterexample gives both large rows zero MUS mass   : True
+     same counterexample passes new per-row side links          : False (expected False)
+     interpretation: the public per-row relation closes the total-check gap
+
+  4. MOVING DEBIT MASS BETWEEN ROWS
+     hide row h with debit 65,481 of T = 68,537,980  (0.10%);  s = 200 units, 2000 draws
+                         scenario      P(caught)    closed form
+                honest: h sampled          0.181          0.174
+       shift h onto row with d=65          0.181          0.174
+     shift h onto row with d=58,059          0.307          0.303
+     shifting never lowers the detection probability below the honest one: the receiving
+     row inherits at least h's selection mass and fails check (a) when opened.
+
+     verifier prefix scan over 20,000 committed rows: 1.4 s (one pass, reused by every selected unit)
+
+     both D1 and D2 are recomputed by the verifier; claiming the neighbouring row
+     for the same monetary unit fails that recomputation in every configuration
+     every sampled unit lies in the interval its row claims, and the range proofs verify
+done

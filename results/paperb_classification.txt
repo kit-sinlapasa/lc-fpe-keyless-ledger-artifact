@@ -1,0 +1,49 @@
+================================================================================
+PAPER B, ITEM 2 -- VERIFIABLE CLASSIFICATION
+================================================================================
+  20,000 rows, 300 accounts, population total T = 1,002,122,093
+  account blinding derived under a key distinct from the amount blinding
+  auditing account 3: 875 rows, balance 43,167,372 (4.31% of the population)
+
+  1. SUBSTITUTION -- deterministic, closed completely
+     every honestly claimed row opens to account 3   : True
+     a row from account 0 claimed as account 3      : False  (must be False)
+     2,000 forged blinding factors tried            : False  (must be False)
+     cost: 1.157 s to build 875 account commitments, 32 B revealed per claimed row
+
+  2. OMISSION -- bounded by monetary-unit sampling
+     units drawn from the WHOLE ledger; the claimed set tells us nothing about
+     what was left out of it
+
+      omitted        M/T     rows out detected (2k trials)  closed form
+      299,489     0.0003            3      0.059 +/- 0.010        0.058
+     1,093,067     0.0011           11      0.206 +/- 0.018        0.196
+     5,046,277     0.0050           52      0.645 +/- 0.021        0.636
+     10,032,172     0.0100          107      0.876 +/- 0.014        0.866
+     20,101,573     0.0201          233      0.984 +/- 0.005        0.983
+     43,167,372     0.0431          875      1.000 +/- 0.000        1.000
+
+  3. HOW MANY UNITS DOES AN AUDITOR NEED?
+     Solving 1-(1-M/T)^s >= 1-beta for s gives s >= ln(beta)/ln(1-M/T).
+     Compare with the sample size auditors already compute for MUS: s = RF/(M/T),
+     with reliability factor RF = 3.0 at 95% and no expected misstatement.
+
+            M/T       ours (95%) classic RF/(M/T)
+          0.100               29               30
+          0.050               59               60
+          0.020              149              150
+          0.010              299              300
+          0.005              598              600
+
+     The two agree to within a unit or two. The cryptographic bound reduces to
+     the sample-size rule the profession already uses, so the scheme needs no new
+     audit methodology --- only the existing one, applied to committed amounts.
+
+  4. WHY THE SPLIT MATTERS
+     A swap moves a row out of account 3 and an equal-valued row in.
+     The balance stays consistent and M is ~0, so the sampling bound of part 2
+     gives NO protection: closed form at M/T = 0 is 0.000.
+     Part 1 rejects it outright. The deterministic check is not a nicety --- it is
+     the only thing standing between the auditor and the zero-magnitude attack.
+
+done

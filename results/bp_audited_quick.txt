@@ -1,0 +1,9 @@
+batch=side bits=32 padded_values=16 bit_values=512
+setup_s=0.011
+prove_s=0.097
+verify_s=0.008
+proof_bytes=864
+expected_proof_bytes=864
+honest_verify=true
+tampered_proof_rejected=true
+wrong_length_rejected=true

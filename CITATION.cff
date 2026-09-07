@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this artifact, please cite the accompanying manuscripts."
+title: "Artifact for LC-FPE and Keyless Verification of Committed General-Ledger State"
+type: software
+authors:
+  - family-names: Savithi
+    given-names: Charuay
+  - family-names: Sinlapasa
+    given-names: Krishna
+version: 1.0.0
+date-released: 2026-09-07
+license: MIT
+repository-code: "https://github.com/kit-sinlapasa/lc-fpe-keyless-ledger-artifact"
+

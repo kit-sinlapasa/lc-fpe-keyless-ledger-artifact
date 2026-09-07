@@ -1,0 +1,45 @@
+======================================================================================================================
+PAPER A -- COMBINED ADVERSARY on the conditional domain (deployed observable)
+======================================================================================================================
+  m=200, 40,000 rows, K=9800, 25 independently generated worlds
+  advantage = max(rank, combined) - baseline, per seed, NOT clipped at zero;
+  'upper' bounds only the mean tested-heuristic contrast, not optimal advantage.
+  The attacker has no fitted hyperparameters -- the Poisson model and the
+  greedy assignment are fixed a priori -- so there is no tuning set to hold out.
+
+  realistic pool (8 cc x 12 dt)
+  cc x dt  N_eff | no-cipher  rank-atk  combined |   rank - base (95%)   comb - base (95%) |    upper
+  ------------------------------------------------------------------------------------------------------------------
+      1x1    3.1 |    77.0%    22.8%    73.4% | -54.27% +- 2.82%  -3.60% +- 0.23% |  -3.40%
+           oracle control (uses test labels): 77.097%
+      3x2   13.5 |    50.4%     2.3%    49.1% | -48.11% +- 0.52%  -1.38% +- 0.05% |  -1.34%
+           oracle control (uses test labels): 50.530%
+      5x3   31.2 |    37.3%     1.2%    37.1% | -36.10% +- 0.49%  -0.24% +- 0.03% |  -0.22%
+           oracle control (uses test labels): 37.364%
+     10x5   68.3 |    25.3%     0.8%    25.3% | -24.50% +- 0.31%  -0.01% +- 0.00% |  -0.00%
+           oracle control (uses test labels): 25.295%
+    25x10  104.6 |    18.6%     0.7%    18.6% | -17.86% +- 0.11%  +0.00% +- 0.00% |  +0.00%
+           oracle control (uses test labels): 18.615%
+
+  sparse pool (100 cc x 10 dt)
+  cc x dt  N_eff | no-cipher  rank-atk  combined |   rank - base (95%)   comb - base (95%) |    upper
+  ------------------------------------------------------------------------------------------------------------------
+      1x1    1.2 |    96.6%    84.8%    96.1% | -11.72% +- 2.65%  -0.49% +- 0.07% |  -0.42%
+           oracle control (uses test labels): 96.577%
+      3x2    2.2 |    84.5%    40.2%    84.5% | -44.37% +- 1.55%  -0.09% +- 0.02% |  -0.08%
+           oracle control (uses test labels): 84.881%
+      5x3    3.9 |    72.3%    15.0%    72.3% | -57.24% +- 0.70%  -0.00% +- 0.01% |  +0.00%
+           oracle control (uses test labels): 73.114%
+     10x5    8.5 |    53.8%     5.2%    53.8% | -48.56% +- 0.27%  +0.00% +- 0.00% |  +0.00%
+           oracle control (uses test labels): 54.930%
+    25x10   17.6 |    31.6%     3.3%    31.6% | -28.28% +- 0.25%  +0.00% +- 0.00% |  +0.00%
+           oracle control (uses test labels): 32.556%
+
+  control: the combined attacker against lifting WITHOUT FPAE (k(a)=1), realistic pool, 5x3
+  combined, no FPAE: 61.6% +- 0.4%   (rank attack in tab:lega: 64.4%)
+
+  These are contrasts of the specified heuristics with context-only MAP.
+  A rational attacker can ignore ciphertext; a negative contrast does not
+  bound optimal advantage or establish absence of information.
+
+done

@@ -1,0 +1,67 @@
+==============================================================================
+PAPER A -- APPLICABILITY CHECKLIST
+==============================================================================
+
+  0. INSTRUMENT CHECK -- S against the values the paper quotes
+         m       K' S computed      paper
+       200    9,800       8.71        8.7   ok
+       300    9,700      10.20       10.2   ok
+
+  1. THE CHECKLIST, ordered by what disqualifies a deployment first
+
+     (a) N_eff > 2        does a (cost centre, document type) cell hold more
+                          than two candidate accounts? If a cell names the
+                          account outright, no aliasing of the account code can
+                          help and LC-FPE does not apply. Binary gate; measure
+                          it on the real chart before anything else.
+     (b) R <= alpha - m   partition size. The account field width alpha is
+                          rarely negotiable, so this fixes how often the books
+                          must be partitioned.
+     (c) m <= ~400        chart size, measured. Beyond that recovery grows and
+                          we have not measured the boundary.
+     (d) n >= eq(histsize)  history for f_hat. The only constraint that cannot
+                          be fixed by configuration -- only by waiting, or by
+                          accepting the larger Delta.
+
+  2. WORKED DEPLOYMENTS
+     alpha = 10^4 unless stated; K = alpha - m; R <= K
+
+                       firm   rows/yr      m         K parts/yr history rows     years
+     micro (one bookkeeper)     3,000    120     9,880       1     2.2e+05      73.9
+     small (our motivating)    12,000    200     9,800       2     1.2e+05       9.7
+                  mid-sized   120,000    300     9,700      13     6.9e+04       0.6
+     mid-sized, 5-digit field   120,000    300    99,700       2     7.3e+06      60.9
+                      large 1,000,000    400    99,600      11     5.1e+06       5.1
+
+  3. THE TENSION
+     Partitions per year rises with firm size; years of history needed falls.
+     The two cross, and where they cross is the only comfortable operating point.
+
+        rows/yr   parts/yr  yrs hist
+          3,000          1     23.07
+         10,000          2      6.92
+         30,000          4      2.31
+        100,000         11      0.69
+        300,000         31      0.23
+      1,000,000        104      0.07
+
+     At m=300, alpha=10^4: K = 9,700, S = 10.2, so a clean f_hat needs 69206 rows.
+     A firm reaches that in one year only once it posts ~69,206 rows a year --- by
+     which point it already needs 8 partitions. There is no firm size at which
+     both constraints are slack at once, and a deployer must choose which to relax.
+
+     Note the 5-digit row above. Widening the account field is the obvious way to
+     cut partitions -- 13 down to 2 -- but n_req grows as K^2, so the history needed
+     goes from 0.6 years to 61. A wider field buys a tighter allocation bound m/2K,
+     and f_hat must then be estimated well enough to keep up with it. Widening the
+     field without the history to match makes Delta worse, not better.
+
+  4. OUR OWN BENCHMARK, CHECKED AGAINST THE RULE
+     tab:base measures a 20,000-row ledger at m=200, K' = 9,800.
+     occupancy = 2.04, which is ABOVE the design rule R/K' <= 1.
+     That is deliberate and it is not a security configuration: encryption cost
+     is per row and independent of the partition boundary, so the throughput
+     figure is unaffected. A compliant deployment splits those rows into 3
+     partitions, which changes rows/s not at all and adds two more anchors.
+
+done
