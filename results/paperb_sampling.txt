@@ -2,7 +2,7 @@
 PAPER B, ITEM I -- PUBLIC-COIN SAMPLING
 ================================================================================
   anchor binds R_p, chain head, timestamp and beacon round 1,000,000
-  anchor size: 140 B
+  canonical firm anchor size: 199 B
 
   1. UNIFORM SELECTION
      200 distinct indices drawn from public data : True
@@ -11,11 +11,11 @@ PAPER B, ITEM I -- PUBLIC-COIN SAMPLING
 
   2. GRINDING: how much does re-closing buy the firm?
      200 of 20,000 rows fraudulent, 200 rows sampled
-     P(a single honest close escapes detection)  : 0.128 +/- 0.010
+     P(a single honest close escapes detection)  : 0.137 +/- 0.011
      closed form exp(-S|F|/N)                    : 0.135
-     P(escape) after W =   1 re-closes            : 0.128
-     P(escape) after W =   4 re-closes            : 0.422
-     P(escape) after W =  16 re-closes            : 0.889
+     P(escape) after W =   1 re-closes            : 0.137
+     P(escape) after W =   4 re-closes            : 0.444
+     P(escape) after W =  16 re-closes            : 0.904
      P(escape) after W =  64 re-closes            : 1.000
      -> grinding is cheap. Unpredictability alone is NOT enough.
 
@@ -27,15 +27,15 @@ PAPER B, ITEM I -- PUBLIC-COIN SAMPLING
 
   3. MONETARY-UNIT SELECTION over committed amounts
        side    S      n*m   prove(s)  verify(s)     proof(B)     sound?
-      debit    1       64       0.58       0.33          688        yes
-      debit    2      128       1.24       0.69          754        yes
-      debit    4      256       2.36       1.39          820        yes
-      debit    8      512       4.76       2.78          886        yes
-      debit   16    1,024      10.64       5.93          952        yes
-      debit   32    2,048      19.80      10.15        1,018        yes
-      debit   64    4,096      36.14      18.70        1,084        yes
-      debit  128    8,192      64.39      37.39        1,150        yes
-     credit   16    1,024       8.51       4.84          952        yes
+      debit    1       64       0.51       0.31          688        yes
+      debit    2      128       1.02       0.59          754        yes
+      debit    4      256       2.04       1.18          820        yes
+      debit    8      512       4.03       2.35          886        yes
+      debit   16    1,024       8.21       4.68          952        yes
+      debit   32    2,048      17.02       9.32        1,018        yes
+      debit   64    4,096      33.14      19.28        1,084        yes
+      debit  128    8,192      66.58      38.23        1,150        yes
+     credit   16    1,024       8.26       4.76          952        yes
 
      (0) all 4,096 public per-row C/D/K side links verify : True
      (b) once-per-period checks, debit and credit side  : True
@@ -57,7 +57,7 @@ PAPER B, ITEM I -- PUBLIC-COIN SAMPLING
      shifting never lowers the detection probability below the honest one: the receiving
      row inherits at least h's selection mass and fails check (a) when opened.
 
-     verifier prefix scan over 20,000 committed rows: 1.4 s (one pass, reused by every selected unit)
+     verifier prefix scan over 20,000 committed rows: 1.3 s (one pass, reused by every selected unit)
 
      both D1 and D2 are recomputed by the verifier; claiming the neighbouring row
      for the same monetary unit fails that recomputation in every configuration

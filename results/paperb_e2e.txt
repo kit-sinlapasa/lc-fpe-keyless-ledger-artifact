@@ -1,8 +1,15 @@
-  honest end-to-end path accepts                       : True
-  one record list reproduces anchor root and chain     : True
-  tampered record is rejected                          : True
-  past beacon round is rejected                        : True
-  anchor after beacon opening time is rejected         : True
+  honest period accepts after beacon opens             : True
+  honest debit MUS presentation accepts                : True
+  honest credit MUS presentation accepts               : True
+  honest account-balance presentation accepts          : True
+  audit before beacon opening is rejected              : True
+  forged beacon statement is rejected                  : True
+  tampered record and length are rejected              : True
+  receipt at beacon opening is rejected                : True
   wrong sampled row is rejected                        : True
-  anchored understated side is rejected                : True
+  foreign account row is rejected                      : True
+  changed previous anchor is rejected                  : True
+  anchored equal understatement is rejected            : True
+  understatement violates per-row side link            : True
+  canonical records are exactly 228 bytes              : True
   all checks pass                                     : True

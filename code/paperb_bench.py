@@ -5,24 +5,29 @@ Paper B primitives: tamper-evident ledger -- implementation and measurement.
 Implemented for real:
   * hash-chained journal   h_i = SHA256(h_{i-1} || row_i)
   * Merkle tree per period, inclusion proofs
-  * period-close anchor    Ed25519 signature over (root || h_last || timestamp)
+  * period-close anchor    canonical 199-byte firm signature plus receipt
   * selective disclosure   open s sampled rows with Merkle paths
   * tamper detection tests
 
-Range proofs are NOT exercised by this benchmark.  They are implemented and
-validated separately in bulletproofs.py, which measures aggregated proofs up to
-n*m = 1024; the size figures quoted for a full partition follow the published
-formula 32*(9 + 2k) with k = log2(n*m) -- one proof for the whole partition,
-not one per row.
+Range proofs are not exercised by this benchmark.  The target-size Ristretto
+component and the P-256 measurement instrument are identified separately.
 """
 import os
 import time
 import hashlib
 import struct
+import statistics
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from paperb_protocol import (ANCHOR_BYTES, P256_RECORD_BYTES, RECEIPT_BYTES,
+                             encode_anchor_envelope, encode_record,
+                             encode_row_id, make_anchor, make_receipt)
 
 N = 20000
 H = hashlib.sha256
+ENTITY, PERIOD, PARTITION, LEDGER = 1, 202609, 0, 0
+DATA_KEY = H(b"PaperB/benchmark/data-key/v1").digest()
 
 
 def leaf(row):
@@ -60,6 +65,24 @@ def build_merkle(leaves):
         return (node(L[0], R[0]), L, R)
     tr = rec(leaves)
     return tr, tr[0]
+
+
+def median_seconds(fn, repetitions):
+    """Warm once, then return the median wall-clock time and final value."""
+    fn()
+    samples, value = [], None
+    for _ in range(repetitions):
+        t0 = time.perf_counter()
+        value = fn()
+        samples.append(time.perf_counter() - t0)
+    return statistics.median(samples), value
+
+
+def build_chain(rows):
+    value = b"\x00" * 32
+    for row in rows:
+        value = H(value + row).digest()
+    return value
 
 
 def merkle_path(tree, idx, n):
@@ -102,30 +125,28 @@ print("=" * 78, flush=True)
 # Here the commitments are 33-byte stand-ins of the right size; the real ones
 # are produced by the Pedersen layer benchmarked separately.
 def make_row(i):
-    rid = struct.pack("<IIQI", 1, 202609, 10 ** 6 + i, i % 7 + 1)   # e,p,doc,line
-    enc = struct.pack("<Iq", i * 7 % 9973, (-1) ** i * (i + 1)).ljust(24, b"\x00")
+    rid = encode_row_id(ENTITY, PERIOD, PARTITION, LEDGER,
+                        10 ** 6 + i, i % 7 + 1)
+    nonce = H(b"PaperB/benchmark/nonce/v1" + rid).digest()[:12]
+    payload = struct.pack(">qI", (-1) ** i * (i + 1), i * 7 % 9973)
+    encrypted_fields = nonce + AESGCM(DATA_KEY).encrypt(nonce, payload, rid)
     c_i = H(b"C" + rid).digest() + b"\x02"                          # 33 B  signed amount
     a_i = H(b"A" + rid).digest() + b"\x03"                          # 33 B  account code
     d_i = H(b"D" + rid).digest() + b"\x02"                          # 33 B  debit side, for sampling
     k_i = H(b"K" + rid).digest() + b"\x03"                          # 33 B  credit side, mirror of D
     link_i = H(b"L" + rid).digest()                                 # 32 B  C/D/K side link
-    return rid + enc + c_i + a_i + d_i + k_i + link_i
+    return encode_record(rid, encrypted_fields, c_i, a_i, d_i, k_i, link_i)
 
 
 rows = [make_row(i) for i in range(N)]
 ROW_BYTES = len(rows[0])
+assert ROW_BYTES == P256_RECORD_BYTES
 
-# --- build chain + Merkle
-t0 = time.time()
-h = b"\x00" * 32
-for r in rows:
-    h = H(h + r).digest()
-t_chain = time.time() - t0
-
-t0 = time.time()
+# --- build chain + Merkle (warm-up plus median of five full builds)
+t_chain, h = median_seconds(lambda: build_chain(rows), 5)
 leaves = [leaf(r) for r in rows]
-tree, root = build_merkle(leaves)
-t_merkle = time.time() - t0
+t_merkle, tree_and_root = median_seconds(lambda: build_merkle(leaves), 5)
+tree, root = tree_and_root
 
 depth = (N - 1).bit_length()
 print("  hash chain build      : {:7.3f} s   ({:.1f} us/row)"
@@ -140,34 +161,27 @@ sk_F = Ed25519PrivateKey.generate()          # the firm's key (adversary holds i
 sk_C = Ed25519PrivateKey.generate()          # the custodian's key (it does not)
 pk_F, pk_C = sk_F.public_key(), sk_C.public_key()
 prev_anchor = H(b"anchor of period p-1").digest()
-env = (b"LEDGER-ANCHOR/1"                    # schema/algorithm version (15 B)
-       + struct.pack("<II", 1, 202609)       # entity, period
-       + struct.pack("<I", N)                # row count
-       + root + h                            # Merkle root, chain head
-       + prev_anchor                         # hash of the previous anchor
-       + struct.pack("<Q", int(time.time()))  # firm's close timestamp tau
-       + struct.pack("<I", 1_000_000))       # beacon round t named in advance
-t0 = time.time()
-sig_F = sk_F.sign(env)
-t_sign = time.time() - t0
-anchor = env + sig_F
+close_time = int(time.time())
+env = encode_anchor_envelope(ENTITY, PERIOD, N, root, h, prev_anchor,
+                             close_time, 1_000_000)
+t_sign, anchor = median_seconds(lambda: make_anchor(env, sk_F), 200)
 # custodian receipt: countersigns the anchor together with its own receipt time
-receipt = anchor + struct.pack("<Q", int(time.time()) + 60)
-sig_C = sk_C.sign(receipt)
+receipt = make_receipt(anchor, close_time + 60, sk_C)
 anchor_bytes = len(anchor)
-anchor_full = len(receipt) + len(sig_C)
+anchor_full = len(receipt)
+assert anchor_bytes == ANCHOR_BYTES and anchor_full == RECEIPT_BYTES
 print("  period-close anchor   : {:7.3f} ms  firm-signed {} B; with custodian "
       "receipt {} B  (per PERIOD, not row)"
       .format(t_sign * 1e3, anchor_bytes, anchor_full), flush=True)
 # the signature must cover every field: flip the beacon round and check
-bad_env = env[:-4] + struct.pack("<I", 1_000_001)
+bad_env = env[:-4] + struct.pack(">I", 1_000_001)
 try:
-    pk_F.verify(sig_F, bad_env); reround = True
+    pk_F.verify(anchor[-64:], bad_env); reround = True
 except Exception:
     reround = False
 print("  anchor with a different beacon round verifies: {}  (expected False)"
       .format(reround), flush=True)
-sig, pk, msg = sig_F, pk_F, env   # names used by the tamper tests below
+sig, pk, msg = anchor[-64:], pk_F, env   # names used by the tamper tests below
 
 # --- inclusion proofs / selective disclosure
 S = 200
@@ -181,17 +195,22 @@ def _below(bound):
 
 
 idxs = [_below(N) for _ in range(S)]
-t0 = time.time()
 proofs = [merkle_path(tree, i, N) for i in idxs]
-t_prove = (time.time() - t0) / S
-t0 = time.time()
-ok = all(verify_path(leaves[idxs[j]], proofs[j], root) for j in range(S))
-t_verify = (time.time() - t0) / S
+t_prove, _ = median_seconds(
+    lambda: [merkle_path(tree, i, N) for i in idxs], 10)
+t_prove /= S
+
+def verify_all_paths():
+    return all(verify_path(leaves[idxs[j]], proofs[j], root) for j in range(S))
+
+
+t_verify, ok = median_seconds(verify_all_paths, 10)
+t_verify /= S
 proof_bytes = depth * 32
 print("  inclusion proof       : {:7.1f} us gen, {:.1f} us verify, {} B each"
       .format(t_prove * 1e6, t_verify * 1e6, proof_bytes), flush=True)
 print("  all {} proofs verify   : {}".format(S, ok), flush=True)
-print("  selective disclosure of {} rows: {:.1f} KB total  ({} B row + {} B path each)"
+print("  selective disclosure of {} rows: {:.1f} KiB total  ({} B row + {} B path each)"
       .format(S, S * (ROW_BYTES + proof_bytes) / 1024, ROW_BYTES, proof_bytes), flush=True)
 
 # --- tamper detection
@@ -306,17 +325,21 @@ t0 = time.time()
 _C = [mul(_G, (_amt[i] + _OMEGA) % _ORDER) + mul(_Hp, _rho[i]) for i in range(N)]
 t_commit = time.time() - t0
 
-t0 = time.time()
-_acc = _C[0]
-for _pt in _C[1:]:
-    _acc += _pt
 _rhs = mul(_G, (N * _OMEGA) % _ORDER) + mul(_Hp, _R)
-_ok = (_acc == _rhs)
-t_balance = time.time() - t0
+
+
+def verify_balance():
+    acc = _C[0].copy()
+    for point in _C[1:]:
+        acc += point
+    return acc == _rhs
+
+
+t_balance, _ok = median_seconds(verify_balance, 10)
 
 # and it must fail when a single satang is off
 _bad = _C[0] + _G
-_accb = _bad
+_accb = _bad.copy()
 for _pt in _C[1:]:
     _accb += _pt
 _catches = (_accb != _rhs)

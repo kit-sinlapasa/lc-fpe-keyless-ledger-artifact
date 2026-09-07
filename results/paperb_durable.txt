@@ -1,14 +1,21 @@
 ==============================================================================
-PAPER B DURABLE END-TO-END PROTOTYPE
+PAPER B DURABLE, ROLE-SEPARATED PROTOTYPE
 ==============================================================================
   SQLite journal_mode=WAL, synchronous=FULL
-  duplicate RowID rejected                                : True
+  duplicate canonical RowID rejected                      : True
   crash before COMMIT rolls close back                    : True
   second period close rejected                            : True
   conflicting custodian receipt rejected                  : True
-  restart verifies persisted anchor and full proofs       : True
-  authenticated-beacon sample verifies end to end         : True
+  keyless restart verifies anchor and full proofs         : True
+  authenticated-beacon sample verifies                    : True
+  authenticated credit-side sample verifies               : True
+  account-balance presentation verifies                   : True
+  foreign account row rejected                            : True
+  audit before beacon opening rejected                    : True
   post-close row tamper rejected                          : True
   forged beacon rejected                                  : True
+  wrong previous-anchor state rejected                    : True
+  canonical records are exactly 228 bytes                 : True
   all checks pass                                      : True
-  scope: durable research prototype, not production ERP
+  scope: durable research prototype; authenticated beacon stand-in
+  scope: no production ERP, live beacon network, or independent audit

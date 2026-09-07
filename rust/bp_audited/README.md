@@ -31,10 +31,13 @@ target/release/paperb-bp-audited --full
 ```
 
 After both proofs verify, the full mode checks every public per-row `C/D/K`
-side link, the amount balance, equal debit/credit totals, a canonical record
-digest used as the anchor, and negative controls for an understated side and
-an altered anchored record. Padding commitments are proved but excluded from
-the 20,000-row anchor.
+side link, the amount balance, equal debit/credit totals, a record digest, and
+negative controls for an understated side and an altered digested record.
+Padding commitments are proved but excluded from the 20,000-row digest. This
+is the target-size range-proof and ledger-consistency component. It does not
+implement the canonical record serializer, signatures, custodian receipt,
+beacon timing, sampling presentation, SQLite persistence, or the complete
+protocol verifier; those are composed in the small Python fixtures.
 
 The two batches use Ristretto, whereas the Python measurement instrument uses
 P-256. They instantiate the same aggregated Bulletproof range statement but

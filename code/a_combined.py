@@ -168,7 +168,7 @@ for s_ in SEEDS:
     vals.append(combined(f, a, c, d, a, np.ones(M, dtype=int), aux))
 m, h = ci(vals)
 print("  combined, no FPAE: {:.1%} +- {:.1%}   (rank attack in tab:lega: "
-      "64.4%)".format(m, h), flush=True)
+      "64.3%)".format(m, h), flush=True)
 print(flush=True)
 print("  These are contrasts of the specified heuristics with context-only MAP.", flush=True)
 print("  A rational attacker can ignore ciphertext; a negative contrast does not", flush=True)

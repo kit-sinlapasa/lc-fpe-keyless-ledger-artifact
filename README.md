@@ -24,8 +24,9 @@ python run_all.py                 # regenerate everything
 Output goes to `results/<script>.txt`. The runner prints wall-clock per script
 and a summary at the end.
 
-The independently audited Bulletproofs cross-check is a separately pinned
-Rust build:
+The target-size Bulletproofs component is a separately pinned Rust build. Its
+dalek dependency versions were examined in an independent audit; that audit
+did not cover this wrapper or protocol composition:
 
 ```text
 cd rust/bp_audited
@@ -43,7 +44,7 @@ The full run's immutable per-batch output is `results/bp_audited_full.txt`.
 The long Python experiment suite was run end to end for the release snapshot;
 the changed security and verifier scripts were rerun again after the final
 protocol fixes. The historical long-suite total was **210 minutes** on one
-laptop core (Windows 11, Python 3.11.15). The audited Rust full-verifier run is
+laptop core (Windows 11, Python 3.11.15). The audited-dependency Rust target-size run is
 listed separately because it uses a pinned 2019 toolchain and Ristretto rather
 than the Python P-256 measurement code.
 
@@ -55,14 +56,14 @@ this table are from that run.
 |---|---|---|
 | `ff1_nist_kat.py` | correctness | 0.4 |
 | `bp_frozen_heart.py` | soundness | 1.3 |
-| `paperb_bench.py` | `tab:perf` | 0.9 |
-| `a_impl_audit.py` | correctness | 4.1 |
+| `paperb_bench.py` | `tab:perf` | see result |
+| `a_impl_audit.py` | correctness | 10.9 |
 | `f_ablation4.py` | `tab:ablation` | 11.9 |
 | `a_applicability.py` | `tab:applic` | 5.1 |
 | `baseline_bench.py` | `tab:base` | 172.7 |
 | `paperb_classification.py` | `tab:class` | 10.8 |
 | `leg_a2.py` | `tab:lega` | 25.7 |
-| `a_combined.py` | `tab:comb` | 68.2 |
+| `a_combined.py` | `tab:comb` | 394.1 |
 | `a_exact_ml.py` | `prop:countopt` | see result |
 | `bulletproofs.py` | `tab:bp` | 28.9 |
 | `observable_test.py` | `tab:obs` | 35.6 |
@@ -75,9 +76,9 @@ this table are from that run.
 | `ci_curve.py` | `fig:ari` | 567.4 |
 | `g_drift3.py` | `tab:drift` | 440.5 |
 | `paperb_sampling.py` | `tab:sampling` | see result | (runs the 4,096-row debit/credit sampling fixture, both consistency checks, the amount-plus-one negative test, and the C/D/K counterexample; clean rerun completed)
-| `paperb_e2e.py` | `e2e` | 8.1 | small canonical record/anchor/beacon/range-proof/opening path; all rejection checks pass
-| `paperb_durable.py` | durable `e2e` | see result | atomic close, restart, receipt, beacon, full small-ledger proofs and eight fault tests
-| `rust/bp_audited --full` | full verifier | 676.9 prove + 55.8 verify | 20,000 rows, two full padded batches, 3,264 B, 2,523 MiB peak
+| `paperb_e2e.py` | `e2e` | see result | role-separated canonical record/anchor/receipt/beacon/range-proof/opening paths for both sides; fourteen checks pass
+| `paperb_durable.py` | durable `e2e` | see result | atomic close, public-key-only restart, exact receipt/anchor formats, debit/credit beacon paths, account path, full small-ledger proofs and fourteen tests
+| `rust/bp_audited --full` | target-size range/consistency component | 676.9 prove + 55.8 verify | 20,000 rows, two padded proof batches, 3,264 B, 2,523 MiB peak; not the complete protocol
 | `ci_sensitivity.py` | `tab:sens` | 606.0 |
 | `d_tfrs.py` | `tab:tfrs` | 1,068.1 |
 | `e_multiline.py` | `tab:multiline` | 790.6 |
@@ -86,11 +87,12 @@ this table are from that run.
 
 \* The two chart-size scripts were run directly rather than through the runner; their times are the sums of the per-configuration seconds each script prints, not a runner wall-clock. Full k-means at $m=1200$ dominates both.
 
-The four correctness and soundness scripts run in under five seconds between
-them, so check those first: `ff1_nist_kat.py` must report 9 of 9,
+Run the focused correctness and soundness scripts before the long experiment
+suite: `ff1_nist_kat.py` must report 9 of 9,
 `bp_frozen_heart.py` must show the *pair* — the original prover and verifier
 accept the forgery, the fixed ones reject it — and
-`a_impl_audit.py` must report a clean round trip.
+`a_impl_audit.py` must report a clean round trip, separated HKDF keys and a
+24-byte RowID round trip.
 
 Measured with Python 3.11.15 on Windows 11; `requirements.txt` pins the exact
 library versions used. Every experiment seeds its own `numpy.random.Generator`,
@@ -177,8 +179,8 @@ Paper B's measured tables are `bulletproofs.py` and the pinned Rust cross-check
 Section~"Public-Coin Sampling". It has four parts, and the second is the
 argument: a firm that merely faces an *unpredictable* coin can re-close its
 books until the sample misses the rows it wants hidden, and the script measures
-how cheap that is — sixteen re-closes take the escape probability from $0.13$ to
-$0.89$. The measured single-close figure, $0.128\pm0.010$, agrees with the
+how cheap that is — sixteen re-closes take the escape probability from $0.14$ to
+$0.90$. The measured single-close figure, $0.137\pm0.011$, agrees with the
 closed form $\exp(-S|F|/N) = 0.135$, which is what makes the measurement worth
 trusting. The fix is that the anchor names the beacon round it will use. Part
 three selects by monetary unit over amounts that stay committed, and every

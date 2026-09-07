@@ -1,13 +1,13 @@
 ==============================================================================
 PAPER B PRIMITIVES -- tamper-evident ledger, 20,000 rows
 ==============================================================================
-  hash chain build      :   0.022 s   (1.1 us/row)
-  Merkle build          :   0.067 s   (3.3 us/row), depth 15
-  period-close anchor   :   3.916 ms  firm-signed 199 B; with custodian receipt 271 B  (per PERIOD, not row)
+  hash chain build      :   0.021 s   (1.0 us/row)
+  Merkle build          :   0.039 s   (2.0 us/row), depth 15
+  period-close anchor   :   0.038 ms  firm-signed 199 B; with custodian receipt 271 B  (per PERIOD, not row)
   anchor with a different beacon round verifies: False  (expected False)
-  inclusion proof       :    14.6 us gen, 35.5 us verify, 480 B each
+  inclusion proof       :     4.4 us gen, 17.8 us verify, 480 B each
   all 200 proofs verify   : True
-  selective disclosure of 200 rows: 134.4 KB total  (208 B row + 480 B path each)
+  selective disclosure of 200 rows: 138.3 KiB total  (228 B row + 480 B path each)
 
   TAMPER TESTS
    modify 1 row  -> chain head differs : True
@@ -33,8 +33,8 @@ PAPER B PRIMITIVES -- tamper-evident ledger, 20,000 rows
      sampling  1000 of 20,000 rows detects it with p = 9.5%
 
   KEYLESS BALANCE over real commitments (N = 20,000)
-   build 20,000 commitments :  31.377 s  (writer, once per period)
-   verify sum C == N*Omega*G + R*H :   0.071 s   holds: True
+   build 20,000 commitments :  25.429 s  (writer, once per period)
+   verify sum C == N*Omega*G + R*H :   0.050 s   holds: True
    the same check against a ledger off by one unit : True  (must be True)
      arithmetic only; sound verification adds the range-proof
      verification, which we do not measure at this size

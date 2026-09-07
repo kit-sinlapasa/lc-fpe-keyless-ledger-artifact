@@ -14,7 +14,9 @@ that the coin happens to be kind to.
 
 PROTOCOL
     1. At close the firm publishes and deposits
-           A_p = Sign_sk( R_p || h_N || tau || t )
+           A_p = env_p || Sign_sk(env_p)
+       where the canonical envelope binds entity, period, row count, R_p,
+       h_N, the previous-anchor hash, tau and t,
        where t names a FUTURE round of a public randomness beacon (drand, or
        the NIST beacon). Binding t inside the signature is the whole security
        argument: the firm is not merely unable to predict the coin, it has
@@ -27,7 +29,8 @@ PROTOCOL
 Why binding t matters: the firm controls row order and when it closes. If the
 anchor did not name the round, the firm could watch B_t, reorder the ledger
 until the sample missed the rows it wanted hidden, and re-close. The test below
-carries this out and shows the re-closed anchor fails signature verification.
+quantifies that grinding, shows that a signature cannot be reused for another
+round, and relies on the custodian to expose multiple valid closes.
 
 TWO SELECTION RULES
     UNIFORM     every row equally likely. Needs no proofs at all.
@@ -61,6 +64,9 @@ import struct
 import time
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from bulletproofs import BP, Q, mul, size_bytes
+from paperb_protocol import (
+    ANCHOR_BYTES, encode_anchor_envelope, make_anchor,
+)
 
 H = hashlib.sha256
 N_ROWS = 20_000
@@ -155,17 +161,20 @@ rows = [H(struct.pack(">I", i)).digest()[:24] + struct.pack(">I", i) + b"\x00" *
         for i in range(N_ROWS)]
 R_p = merkle_root([leaf(r) for r in rows])
 h_N = chain_head(rows)
-tau = struct.pack("<Q", 1_767_225_600)   # fixed close timestamp, so the run reproduces
+tau = 1_767_225_600                     # fixed close timestamp, so the run reproduces
 ROUND = 1_000_000                      # a future beacon round
+ENTITY, PERIOD = 1, 202609
+PREVIOUS_ANCHOR_HASH = H(b"paperb/sampling/previous-anchor").digest()
 
 sk = Ed25519PrivateKey.from_private_bytes(H(b"artifact-firm-key").digest())
 pk = sk.public_key()
-msg = R_p + h_N + tau + struct.pack(">I", ROUND)
-sig = sk.sign(msg)
-anchor = sig + msg
+msg = encode_anchor_envelope(
+    ENTITY, PERIOD, N_ROWS, R_p, h_N, PREVIOUS_ANCHOR_HASH, tau, ROUND)
+anchor = make_anchor(msg, sk)
 print("  anchor binds R_p, chain head, timestamp and beacon round {:,}"
       .format(ROUND), flush=True)
-print("  anchor size: {} B".format(len(anchor)), flush=True)
+print("  canonical firm anchor size: {} B".format(len(anchor)), flush=True)
+assert len(anchor) == ANCHOR_BYTES
 
 beacon = Beacon()
 B_t = beacon.value(ROUND)
@@ -200,8 +209,16 @@ def escapes(seed_bytes):
     """True if the sample derived from this anchor touches no fraudulent row."""
     return not (set(uniform_sample(seed_bytes, B_t, N_ROWS, S)) & bad)
 
+def reclosed_anchor(counter):
+    root = H(R_p + struct.pack(">I", counter)).digest()
+    env = encode_anchor_envelope(
+        ENTITY, PERIOD, N_ROWS, root, h_N, PREVIOUS_ANCHOR_HASH,
+        tau, ROUND)
+    return make_anchor(env, sk)
+
+
 TRIALS = 4000
-base = sum(escapes(struct.pack(">I", k) + msg) for k in range(TRIALS)) / TRIALS
+base = sum(escapes(reclosed_anchor(k)) for k in range(TRIALS)) / TRIALS
 se = (base * (1 - base) / TRIALS) ** 0.5
 import math
 print("     P(a single honest close escapes detection)  : {:.3f} +/- {:.3f}"
@@ -223,7 +240,10 @@ print("     first is already on deposit with the third party. Grinding is "
 print("     not a cryptographic attack but a visible act of producing two "
       "closes.", flush=True)
 try:
-    pk.verify(sig, R_p + h_N + tau + struct.pack(">I", ROUND + 1))
+    changed_round = encode_anchor_envelope(
+        ENTITY, PERIOD, N_ROWS, R_p, h_N, PREVIOUS_ANCHOR_HASH,
+        tau, ROUND + 1)
+    pk.verify(anchor[-64:], changed_round)
     swap = True
 except Exception:
     swap = False

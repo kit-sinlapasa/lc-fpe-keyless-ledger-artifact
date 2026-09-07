@@ -4,7 +4,7 @@ LC-FPE code layer + the Paillier COMPARISON BASELINE for the amount layer.
 
 Everything here is real crypto -- nothing is simulated:
   * FF1      NIST SP 800-38G, 10-round Feistel, AES-CBC-MAC PRF
-  * FPAE     Hamilton alias allocation (with clawback) + HMAC-SHA256 selection
+  * FPAE     exact l1-optimal alias allocation + HMAC-SHA256 selection
   * Paillier additively homomorphic amounts, with the two standard
              deployment optimisations: g = 1+n  (so g^m = 1+mn mod n^2)
              and an offline pool of precomputed r^n values
@@ -27,7 +27,11 @@ import hmac
 import hashlib
 import numpy as np
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from Crypto.Util.number import getPrime, inverse
+
+from paperb_protocol import encode_row_id
 
 
 # --------------------------------------------------------------- AES helpers
@@ -183,6 +187,8 @@ def _alloc_hamilton_legacy(f, K):
 ALPHA = 10_000      # format space of the four-digit account-code field
 N_CC_FMT = 1_000    # three digits
 N_DT_FMT = 100      # two digits
+ALIAS_SECURITY_BITS = 256
+MAX_ALIAS_BLOCKS = (ALIAS_SECURITY_BITS + 17) // 18
 
 
 def lift(alias, cc, dt, alpha=ALPHA):
@@ -215,7 +221,7 @@ class DuplicateRowError(ValueError):
 
 
 def row_id(entity, period, partition, ledger, doc, line):
-    """Canonical global RowID: the SIX fields the papers define, in order.
+    """Canonical fixed-width RowID shared by both papers.
 
         id = entity | period | partition | ledger | document | line
 
@@ -229,18 +235,10 @@ def row_id(entity, period, partition, ledger, doc, line):
     the specification the papers state or let a reader parse the identifier
     back into its fields.
 
-    Encoding: each field is rendered as ASCII and joined by "|", which is
-    unambiguous because no field may contain that byte -- the registry below
-    rejects any that does. A deployment that wants fixed-width binary RowIDs
-    may substitute one; nothing above this function depends on the encoding
-    beyond its being injective."""
-    parts = []
-    for x in (entity, period, partition, ledger, doc, line):
-        b = str(x).encode()
-        if b"|" in b:
-            raise ValueError("RowID field may not contain the separator: {!r}".format(x))
-        parts.append(b)
-    return b"|".join(parts)
+    The byte layout is ``u32|u32|u16|u16|u64|u32`` in network order.  Keeping
+    this function as the entry point preserves existing callers while making
+    Paper A and Paper B hash exactly the same identifier bytes."""
+    return encode_row_id(entity, period, partition, ledger, doc, line)
 
 
 class RowIDRegistry:
@@ -263,6 +261,14 @@ def _prf(key, tag, msg):
     return hmac.new(key, tag + b"\x00" + msg, hashlib.sha256).digest()
 
 
+def derive_key(master_key, label, context=b""):
+    """HKDF-SHA-256 key hierarchy used by the manuscript's KeyGen."""
+    if not isinstance(label, bytes) or not isinstance(context, bytes):
+        raise TypeError("HKDF label and context must be bytes")
+    return HKDF(algorithm=hashes.SHA256(), length=32, salt=None,
+                info=b"LC-FPE/v1/" + label + b"/" + context).derive(master_key)
+
+
 def alias_index(key, doc, line, ka, rid=None):
     """Unbiased index in [0, ka) by rejection sampling on a counter-extended
     PRF. `rid` is the canonical RowID; the (doc, line) pair is kept for
@@ -278,8 +284,7 @@ def alias_index(key, doc, line, ka, rid=None):
         rid = str(doc).encode() + b":" + str(line).encode()
     width = ka.bit_length()
     mask = (1 << width) - 1
-    ctr = 0
-    while True:
+    for ctr in range(MAX_ALIAS_BLOCKS):
         h = _prf(key, b"alias", rid + b"#" + ctr.to_bytes(4, "big"))
         # take independent `width`-bit windows from the digest; each is a
         # uniform candidate and is accepted iff it falls below ka
@@ -289,13 +294,13 @@ def alias_index(key, doc, line, ka, rid=None):
             if cand < ka:
                 return cand
             bits >>= width
-        ctr += 1
+    raise RuntimeError("alias rejection sampler exhausted its security cap")
 
 
 def blinding_scalar(key, rid, order):
     """Hash-to-scalar for rho in Z_q: 512 bits of PRF output reduced mod q,
     which is within 2^-256 of uniform, under its own domain tag."""
-    h = _prf(key, b"blind", rid) + _prf(key, b"blind2", rid)
+    h = _prf(key, b"blind/0", rid) + _prf(key, b"blind/1", rid)
     return int.from_bytes(h, "big") % order
 
 

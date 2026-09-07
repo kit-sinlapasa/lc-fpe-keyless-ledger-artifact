@@ -35,7 +35,6 @@ import os
 import sys
 import time
 import struct
-import hashlib
 import platform
 import statistics
 import numpy as np
@@ -46,11 +45,12 @@ from Crypto.PublicKey import ECC
 from Crypto.Math.Numbers import Integer
 
 import lcfpe_impl as L
+from hash_to_curve import GX, GY, N as P256_ORDER, hash_to_curve
 
 N, M = 20000, 200
 ROW = 32
 REPS_FAST, REPS_SLOW = 20, 5
-ENTITY, PERIOD, PART, LEDGER = 1, 202609, 1, "GL"
+ENTITY, PERIOD, PART, LEDGER = 1, 202609, 1, 0
 OMEGA = 1 << 40
 
 # ------------------------------------------------------------------ ledger
@@ -201,30 +201,20 @@ K = L.ALPHA - M
 k = L.alloc_hamilton(f, K)                    # exact l1 minimiser (alloc_opt)
 start = np.concatenate([[0], np.cumsum(k)[:-1]])
 owner = np.repeat(np.arange(M), k)            # alias -> account, for decrypt
-key_alias, key_blind, key_nonce = os.urandom(32), os.urandom(32), os.urandom(32)
-key_ff1, key_aead = os.urandom(32), os.urandom(32)
+master_key = os.urandom(32)
+context = struct.pack(">IIH", ENTITY, PERIOD, PART)
+key_alias = L.derive_key(master_key, b"alias")
+key_blind = L.derive_key(master_key, b"blind")
+key_ff1 = L.derive_key(master_key, b"fpe")
+key_aead = L.derive_key(master_key, b"aead", context)
 ff1 = L.FF1(key_ff1, radix=10)
 aead = AESGCM(key_aead)
 TWEAK = struct.pack("<IIH", ENTITY, PERIOD, PART)     # (e, p, pi)
 
-curve = ECC._curves["p256"]
-G = ECC.EccPoint(int(curve.Gx), int(curve.Gy), curve="p256")
-ORDER, P_, B_ = int(curve.order), int(curve.p), int(curve.b)
-
-
-def h2c(label):
-    ctr = 0
-    while True:
-        h = hashlib.sha256(label + ctr.to_bytes(4, "big")).digest()
-        x = int.from_bytes(h, "big") % P_
-        rhs = (pow(x, 3, P_) - 3 * x + B_) % P_
-        y = pow(rhs, (P_ + 1) // 4, P_)
-        if pow(y, 2, P_) == rhs:
-            return ECC.EccPoint(x, y, curve="p256")
-        ctr += 1
-
-
-Hp = h2c(b"LC-FPE/pedersen/H/v1")
+G = ECC.EccPoint(GX, GY, curve="p256")
+ORDER = P256_ORDER
+Hp = hash_to_curve(b"LC-FPE/pedersen/H/v1",
+                   b"LC-FPE-P256_XMD:SHA-256_SSWU_RO_/v1")
 enc_rows = None
 rho_sum = 0
 
@@ -374,7 +364,7 @@ print("     (no AEAD tag is forged in that attack; Dec catches it by", flush=Tru
 print("      recomputing C from the RowID-derived rho and the amount)", flush=True)
 print("   RowID registry rejects a duplicate              : ", end="", flush=True)
 try:
-    rg = L.RowIDRegistry(); x = L.row_id(1, 2, 0, "GL", 3, 4); rg.check(x); rg.check(x); print("False")
+    rg = L.RowIDRegistry(); x = L.row_id(1, 2, 0, 0, 3, 4); rg.check(x); rg.check(x); print("False")
 except L.DuplicateRowError:
     print("True", flush=True)
 print("   LC-FPE bytes/row = {} fmt + 33 C + {} amt AEAD + {} text AEAD (nonces derived)".format(

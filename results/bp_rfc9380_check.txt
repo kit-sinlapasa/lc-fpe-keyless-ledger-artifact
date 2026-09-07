@@ -25,13 +25,13 @@
   get slower; prove and verify should not move. Measured at two sizes:
 
      n*m    deriv     setup(s)    prove(s)   verify(s)   size(B)
-      64   legacy         0.03        0.51        0.31       688 ok
-      64  RFC9380         0.13        0.60        0.38       688 ok
-   1,024   legacy         0.51        9.65        5.12       952 ok
-   1,024  RFC9380         1.93        8.55        4.96       952 ok
+      64   legacy         0.03        0.50        0.29       688 ok
+      64  RFC9380         0.12        0.50        0.31       688 ok
+   1,024   legacy         0.45        7.86        4.53       952 ok
+   1,024  RFC9380         1.83        7.91        4.60       952 ok
 
-  n*m=64      setup x4.8   prove +17.4%   verify +22.7%   size identical
-  n*m=1024    setup x3.8   prove -11.4%   verify -3.1%   size identical
+  n*m=64      setup x4.5   prove -0.5%   verify +5.2%   size identical
+  n*m=1024    setup x4.1   prove +0.7%   verify +1.5%   size identical
 
   Proof sizes are identical, which is the check that does not depend
   on the machine. The prove and verify figures are single runs on a

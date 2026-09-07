@@ -1,26 +1,46 @@
 #!/usr/bin/env python3
-"""Small end-to-end fixture for Paper B's anchored sampling path.
+"""Role-separated, small end-to-end fixture for Paper B.
 
-This is deliberately separate from the long benchmark.  It checks that one
-canonical record list is used for the Merkle root, chain head, signed anchor,
-beacon-derived sample, interval proof, inclusion path, and row openings.
-It also checks the explicit future-round and close-time guards in the protocol
-specification.
+The writer closes one canonical record set, a custodian timestamps that exact
+anchor before the chosen beacon round opens, and a later keyless verifier
+checks the period and a monetary-unit sample. Plaintext witnesses are kept
+out of the verifier-facing period object.
 """
 import bisect
+import copy
 import hashlib
 import struct
 
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from bulletproofs import BP, Q, enc, mul
+from paperb_protocol import (
+    P256_RECORD_BYTES,
+    ROW_ID_BYTES,
+    decode_row_id,
+    encode_anchor_envelope,
+    encode_record,
+    encode_row_id,
+    make_anchor,
+    make_receipt,
+    verify_anchor,
+    verify_receipt,
+)
 
 
 H = hashlib.sha256
 OMEGA = 1 << 40
 N = 16
 S = 4
-CURRENT_ROUND = 100
-NOW = 150
+ENTITY = 1
+PERIOD = 202609
+PARTITION = 0
+LEDGER = 0
+PREVIOUS_ANCHOR_HASH = H(b"paperb-e2e/genesis").digest()
+CLOSE_TIME = 100
+RECEIPT_TIME = 120
+BEACON_ROUND = 200
+AUDIT_TIME = 350
 
 
 def node(left, right):
@@ -36,7 +56,7 @@ def split_point(n):
 
 
 def merkle_root(records):
-    leaves = [leaf(r) for r in records]
+    leaves = [leaf(record) for record in records]
     if len(leaves) == 1:
         return leaves[0]
     k = split_point(len(leaves))
@@ -44,10 +64,10 @@ def merkle_root(records):
 
 
 def chain_head(records):
-    h = b"\x00" * 32
+    head = b"\x00" * 32
     for record in records:
-        h = H(h + record).digest()
-    return h
+        head = H(head + record).digest()
+    return head
 
 
 def merkle_path(records, index):
@@ -61,7 +81,7 @@ def merkle_path(records, index):
         (merkle_root(records[:k]), False)]
 
 
-def verify_path(record, index, path, root):
+def verify_path(record, path, root):
     current = leaf(record)
     for sibling, sibling_on_right in path:
         current = (node(current, sibling) if sibling_on_right
@@ -69,19 +89,58 @@ def verify_path(record, index, path, root):
     return current == root
 
 
+def sum_points(points, generator):
+    total = mul(generator, 0)
+    for point in points:
+        total = total + point
+    return total
+
+
 class Beacon:
-    """Deterministic stand-in for an externally authenticated beacon."""
+    """Authenticated deterministic stand-in; no live network is claimed."""
 
-    def value(self, round_number):
-        return H(b"paperb-e2e-beacon" + struct.pack(">I", round_number)).digest()
+    DOMAIN = b"PAPERB-E2E-BEACON/1"
 
-    def opens_at(self, round_number):
+    def __init__(self):
+        self._private_key = Ed25519PrivateKey.from_private_bytes(
+            H(b"paperb-e2e-beacon-key").digest())
+        self.public_key = self._private_key.public_key()
+
+    @staticmethod
+    def opens_at(round_number):
         return round_number + 100
 
+    def publish(self, round_number):
+        opening = self.opens_at(round_number)
+        value = H(self.DOMAIN + struct.pack(">I", round_number)).digest()
+        message = (self.DOMAIN + struct.pack(">IQ", round_number, opening)
+                   + value)
+        return dict(round=round_number, opening=opening, value=value,
+                    signature=self._private_key.sign(message))
 
-def sample_below(x, bound):
+    def verify(self, statement, expected_round, audit_time):
+        try:
+            if statement["round"] != expected_round:
+                return False
+            if statement["opening"] != self.opens_at(expected_round):
+                return False
+            if audit_time < statement["opening"]:
+                return False
+            message = (self.DOMAIN
+                       + struct.pack(">IQ", statement["round"],
+                                     statement["opening"])
+                       + statement["value"])
+            self.public_key.verify(statement["signature"], message)
+            return True
+        except (KeyError, TypeError, ValueError):
+            return False
+        except Exception:
+            return False
+
+
+def sample_below(value, bound):
     limit = (1 << 256) // bound * bound
-    return None if x >= limit else x % bound
+    return None if value >= limit else value % bound
 
 
 def sample_distinct(seed, bound, count):
@@ -89,183 +148,403 @@ def sample_distinct(seed, bound, count):
         raise ValueError("invalid sample size")
     out, seen, counter = [], set(), 0
     while len(out) < count:
-        x = int.from_bytes(H(seed + struct.pack(">I", counter)).digest(),
-                           "big")
+        candidate = int.from_bytes(
+            H(seed + struct.pack(">I", counter)).digest(), "big")
         counter += 1
-        value = sample_below(x, bound)
+        value = sample_below(candidate, bound)
         if value is not None and value not in seen:
             seen.add(value)
             out.append(value)
     return sorted(out)
 
 
-def record_bytes(index, amount, account, C, A, D, K, side_link):
-    return (struct.pack(">IqI", index, amount, account) + enc(C) + enc(A)
-            + enc(D) + enc(K) + int(side_link).to_bytes(32, "big"))
+def parameters_valid(row_count, total, sample_size):
+    return (row_count > 0
+            and row_count * (1 << 64) < Q
+            and (row_count + 1) * (1 << 32) + OMEGA < Q
+            and (1 << 64) + (1 << 33) + OMEGA < Q
+            and 0 < total < row_count * (1 << 32)
+            and total < (1 << 256)
+            and 1 <= sample_size <= total)
 
 
-def make_fixture(tau=100, round_number=200, understate=False):
-    bp = BP(32, 2 * S)
+def encrypted_fields(row_id, amount, account, key):
+    nonce = H(b"paperb-e2e/nonce" + row_id).digest()[:12]
+    payload = struct.pack(">qI", amount, account)
+    value = nonce + AESGCM(key).encrypt(nonce, payload, row_id)
+    if len(value) != 40:
+        raise AssertionError("encrypted-field width changed")
+    return value
+
+
+def make_fixture():
+    amount_bp = BP(64, N)
+    side_bp = BP(32, 2 * N)
+    sample_bp = BP(32, 2 * S)
     amounts = [3, -2, 5, -6, 4, -4, 7, -7,
                2, -3, 6, -5, 1, -2, 8, -7]
-    accounts = [1000 + i for i in range(N)]
+    accounts = [1000 + i % 4 for i in range(N)]
     rho = [11 + i for i in range(N)]
     sigma = [101 + i for i in range(N)]
     eta = [201 + i for i in range(N)]
     zeta = [301 + i for i in range(N)]
-    d = [max(v, 0) for v in amounts]
-    k = [max(-v, 0) for v in amounts]
-    if understate:
-        d[0] -= 1
-        k[1] -= 1
-    T = sum(d)
-    assert sum(amounts) == 0 and sum(k) == T
+    debit = [max(value, 0) for value in amounts]
+    credit = [max(-value, 0) for value in amounts]
+    total = sum(debit)
+    assert sum(amounts) == 0 and sum(credit) == total
 
-    C = [bp.commit(amounts[i] + OMEGA, rho[i]) for i in range(N)]
-    A = [bp.commit(accounts[i], sigma[i]) for i in range(N)]
-    D = [bp.commit(d[i], eta[i]) for i in range(N)]
-    K = [bp.commit(k[i], zeta[i]) for i in range(N)]
+    shifted = [value + OMEGA for value in amounts]
+    C = [amount_bp.commit(shifted[i], rho[i]) for i in range(N)]
+    A = [amount_bp.commit(accounts[i], sigma[i]) for i in range(N)]
+    D = [amount_bp.commit(debit[i], eta[i]) for i in range(N)]
+    K = [amount_bp.commit(credit[i], zeta[i]) for i in range(N)]
     side_link = [(eta[i] - zeta[i] - rho[i]) % Q for i in range(N)]
-    records = [record_bytes(i, amounts[i], accounts[i], C[i], A[i], D[i], K[i],
-                            side_link[i])
+    data_key = H(b"paperb-e2e/data-key").digest()
+    row_ids = [encode_row_id(ENTITY, PERIOD, PARTITION, LEDGER,
+                             10000 + i // 2, i % 2)
                for i in range(N)]
+    encrypted = [encrypted_fields(row_ids[i], amounts[i], accounts[i],
+                                  data_key) for i in range(N)]
+    records = [encode_record(row_ids[i], encrypted[i], enc(C[i]), enc(A[i]),
+                             enc(D[i]), enc(K[i]),
+                             side_link[i].to_bytes(32, "big"))
+               for i in range(N)]
+    assert all(len(record) == P256_RECORD_BYTES for record in records)
 
-    root = merkle_root(records)
-    head = chain_head(records)
-    env = struct.pack(">IIQI", N, T, tau, round_number) + root + head
-    sk = Ed25519PrivateKey.from_private_bytes(H(b"paperb-e2e-firm").digest())
-    anchor = env + sk.sign(env)
-    return dict(bp=bp, amounts=amounts, accounts=accounts, rho=rho,
-                sigma=sigma, eta=eta, zeta=zeta, d=d, k=k, T=T, C=C, A=A,
-                D=D, K=K, side_link=side_link, records=records, root=root,
-                head=head, env=env,
-                anchor=anchor, public_key=sk.public_key(), tau=tau,
-                round=round_number)
+    root, head = merkle_root(records), chain_head(records)
+    firm_key = Ed25519PrivateKey.from_private_bytes(
+        H(b"paperb-e2e-firm-key").digest())
+    custodian_key = Ed25519PrivateKey.from_private_bytes(
+        H(b"paperb-e2e-custodian-key").digest())
+    env = encode_anchor_envelope(
+        ENTITY, PERIOD, N, root, head, PREVIOUS_ANCHOR_HASH,
+        CLOSE_TIME, BEACON_ROUND)
+    anchor = make_anchor(env, firm_key)
+    receipt = make_receipt(anchor, RECEIPT_TIME, custodian_key)
+
+    public = dict(
+        entity=ENTITY, period=PERIOD, row_count=N, sample_size=S,
+        previous_anchor_hash=PREVIOUS_ANCHOR_HASH, records=records,
+        row_ids=row_ids, encrypted=encrypted, C=C, A=A, D=D, K=K,
+        side_link=side_link, total=total, sum_rho=sum(rho) % Q,
+        sum_eta_minus_rho=(sum(eta) - sum(rho)) % Q,
+        sum_zeta_plus_rho=(sum(zeta) + sum(rho)) % Q,
+        amount_proof=amount_bp.prove(shifted, rho),
+        side_proof=side_bp.prove(debit + credit, eta + zeta),
+        amount_bp=amount_bp, side_bp=side_bp, sample_bp=sample_bp,
+        anchor=anchor, receipt=receipt,
+        firm_public_key=firm_key.public_key(),
+        custodian_public_key=custodian_key.public_key(),
+    )
+    witness = dict(amounts=amounts, accounts=accounts, rho=rho, sigma=sigma,
+                   eta=eta, zeta=zeta, debit=debit, credit=credit)
+    signing = dict(firm=firm_key, custodian=custodian_key)
+    return public, witness, signing
 
 
-def parse_anchor(fixture, anchor, current_round=CURRENT_ROUND):
-    if len(anchor) < 64 + 20 + 64:
-        return False
-    env, signature = anchor[:-64], anchor[-64:]
+def record_matches_public(period, index, record):
     try:
-        fixture["public_key"].verify(signature, env)
+        if len(record) != P256_RECORD_BYTES:
+            return False
+        row_id = record[:ROW_ID_BYTES]
+        entity, period_code, partition, ledger, _, _ = decode_row_id(row_id)
+        if (entity != period["entity"] or period_code != period["period"]
+                or partition != PARTITION or ledger != LEDGER):
+            return False
+        expected = encode_record(
+            row_id, period["encrypted"][index], enc(period["C"][index]),
+            enc(period["A"][index]), enc(period["D"][index]),
+            enc(period["K"][index]),
+            period["side_link"][index].to_bytes(32, "big"))
+        return record == expected
+    except (KeyError, ValueError, IndexError):
+        return False
+
+
+def verify_side_links(period):
+    bp = period["amount_bp"]
+    return all(
+        period["D"][i] + mul(period["K"][i], Q - 1)
+        + mul(period["C"][i], Q - 1) + mul(bp.G, OMEGA)
+        == mul(bp.H, period["side_link"][i])
+        for i in range(period["row_count"]))
+
+
+def verify_period(period, records=None, anchor=None, receipt=None,
+                  expected_previous_anchor_hash=PREVIOUS_ANCHOR_HASH):
+    records = period["records"] if records is None else records
+    anchor = period["anchor"] if anchor is None else anchor
+    receipt = period["receipt"] if receipt is None else receipt
+    try:
+        header = verify_anchor(anchor, period["firm_public_key"])
+        receipt_time = verify_receipt(
+            receipt, anchor, period["custodian_public_key"])
     except Exception:
         return False
-    n_rows, total, tau, round_number = struct.unpack(">IIQI", env[:20])
-    root, head = env[20:52], env[52:84]
-    if n_rows != N or total != fixture["T"]:
+    if (header["entity"] != period["entity"]
+            or header["period"] != period["period"]
+            or header["row_count"] != period["row_count"]
+            or header["previous_anchor_hash"] != expected_previous_anchor_hash
+            or not header["close_time"] < receipt_time
+            < Beacon.opens_at(header["beacon_round"])):
         return False
-    if round_number <= current_round:
+    if not parameters_valid(period["row_count"], period["total"],
+                            period["sample_size"]):
         return False
-    if tau >= Beacon().opens_at(round_number):
+    if len(records) != period["row_count"]:
         return False
-    return (root == fixture["root"] and head == fixture["head"]
-            and tau == fixture["tau"] and round_number == fixture["round"])
-
-
-def verify_period(fixture, records=None, anchor=None, current_round=CURRENT_ROUND):
-    records = fixture["records"] if records is None else records
-    anchor = fixture["anchor"] if anchor is None else anchor
-    if not parse_anchor(fixture, anchor, current_round):
+    row_ids = [record[:ROW_ID_BYTES] for record in records]
+    if len(set(row_ids)) != len(row_ids):
         return False
-    if merkle_root(records) != fixture["root"] or chain_head(records) != fixture["head"]:
+    if not all(record_matches_public(period, i, record)
+               for i, record in enumerate(records)):
         return False
-    bp = fixture["bp"]
-    return all(
-        fixture["D"][i] + mul(fixture["K"][i], Q - 1)
-        + mul(fixture["C"][i], Q - 1) + mul(bp.G, OMEGA)
-        == mul(bp.H, fixture["side_link"][i]) for i in range(N))
-
-
-def prepare_sample(fixture):
-    bp = fixture["bp"]
-    beacon = Beacon()
-    seed = fixture["anchor"] + beacon.value(fixture["round"]) + b"mus"
-    units = sample_distinct(seed, fixture["T"], S)
-    cumulative_values, cumulative_points = [], []
-    value_total, point_total = 0, mul(bp.G, 0)
-    for point, value in zip(fixture["D"], fixture["d"]):
-        point_total = point_total + point
-        value_total += value
-        cumulative_points.append(point_total)
-        cumulative_values.append(value_total)
-
-    indices, interval_values, interval_blinds = [], [], []
-    for unit in units:
-        j = bisect.bisect_right(cumulative_values, unit)
-        previous_value = cumulative_values[j - 1] if j else 0
-        previous_point = cumulative_points[j - 1] if j else mul(bp.G, 0)
-        indices.append(j)
-        interval_values.extend([unit - previous_value,
-                                cumulative_values[j] - unit - 1])
-        previous_blind = sum(fixture["eta"][:j]) % Q
-        current_blind = sum(fixture["eta"][:j + 1]) % Q
-        interval_blinds.extend([(-previous_blind) % Q, current_blind])
-
-    commitments = [bp.commit(interval_values[i], interval_blinds[i])
-                   for i in range(len(interval_values))]
-    proof = bp.prove(interval_values, interval_blinds)
-    return dict(beacon=beacon, units=units, indices=indices,
-                cumulative_values=cumulative_values,
-                cumulative_points=cumulative_points, commitments=commitments,
-                proof=proof)
-
-
-def verify_sample(fixture, sample, claimed_indices=None):
-    if not verify_period(fixture):
+    if (merkle_root(records) != header["root"]
+            or chain_head(records) != header["chain_head"]):
         return False
-    bp = fixture["bp"]
-    if bp.verify(sample["commitments"], sample["proof"])[0] is not True:
+    if not verify_side_links(period):
         return False
-    indices = sample["indices"] if claimed_indices is None else claimed_indices
-    if len(indices) != S:
+
+    amount_bp, side_bp = period["amount_bp"], period["side_bp"]
+    if amount_bp.verify(period["C"], period["amount_proof"])[0] is not True:
         return False
-    for n, (unit, j) in enumerate(zip(sample["units"], indices)):
-        if not 0 <= j < N:
-            return False
-        previous_value = sample["cumulative_values"][j - 1] if j else 0
-        current_value = sample["cumulative_values"][j]
-        if not previous_value <= unit < current_value:
-            return False
-        previous_point = (sample["cumulative_points"][j - 1]
-                          if j else mul(bp.G, 0))
-        current_point = sample["cumulative_points"][j]
-        D1 = mul(bp.G, unit) + mul(previous_point, Q - 1)
-        D2 = current_point + mul(bp.G, (-(unit + 1)) % Q)
-        if D1 != sample["commitments"][2 * n] or D2 != sample["commitments"][2 * n + 1]:
-            return False
-        if not verify_path(fixture["records"][j], j,
-                           merkle_path(fixture["records"], j), fixture["root"]):
-            return False
-        if bp.commit(fixture["amounts"][j] + OMEGA, fixture["rho"][j]) != fixture["C"][j]:
-            return False
-        if bp.commit(fixture["accounts"][j], fixture["sigma"][j]) != fixture["A"][j]:
-            return False
-        if bp.commit(fixture["d"][j], fixture["eta"][j]) != fixture["D"][j]:
-            return False
-        if bp.commit(fixture["k"][j], fixture["zeta"][j]) != fixture["K"][j]:
-            return False
+    if side_bp.verify(period["D"] + period["K"],
+                      period["side_proof"])[0] is not True:
+        return False
+    if (sum_points(period["C"], amount_bp.G)
+            != mul(amount_bp.G, period["row_count"] * OMEGA)
+            + mul(amount_bp.H, period["sum_rho"])):
+        return False
+    sum_c = sum_points(period["C"], amount_bp.G)
+    sum_d = sum_points(period["D"], amount_bp.G)
+    sum_k = sum_points(period["K"], amount_bp.G)
+    if (sum_d + mul(sum_c, Q - 1)
+            + mul(amount_bp.G, period["row_count"] * OMEGA - period["total"])
+            != mul(amount_bp.H, period["sum_eta_minus_rho"])):
+        return False
+    if (sum_k + sum_c
+            + mul(amount_bp.G,
+                  -(period["row_count"] * OMEGA + period["total"]))
+            != mul(amount_bp.H, period["sum_zeta_plus_rho"])):
+        return False
     return True
 
 
+def prepare_account_balance(period, witness, account):
+    indices = [i for i, value in enumerate(witness["accounts"])
+               if value == account]
+    return dict(account=account, indices=indices,
+                balance=sum(witness["amounts"][i] for i in indices),
+                amount_blind=sum(witness["rho"][i] for i in indices) % Q,
+                account_blinds=[witness["sigma"][i] for i in indices])
+
+
+def verify_account_balance(period, presentation):
+    if not verify_period(period):
+        return False
+    try:
+        indices = presentation["indices"]
+        if (not indices or len(indices) != len(set(indices))
+                or len(indices) != len(presentation["account_blinds"])):
+            return False
+        if any(index < 0 or index >= period["row_count"] for index in indices):
+            return False
+        bp = period["amount_bp"]
+        for index, blind in zip(indices, presentation["account_blinds"]):
+            if (period["A"][index]
+                    != mul(bp.G, presentation["account"])
+                    + mul(bp.H, blind)):
+                return False
+        balance = presentation["balance"]
+        if not (-len(indices) * OMEGA <= balance
+                < len(indices) * ((1 << 64) - OMEGA)):
+            return False
+        return (sum_points([period["C"][i] for i in indices], bp.G)
+                == mul(bp.G, balance + len(indices) * OMEGA)
+                + mul(bp.H, presentation["amount_blind"]))
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def prepare_sample(period, witness, beacon, side="debit"):
+    if side not in ("debit", "credit"):
+        raise ValueError("sample side must be debit or credit")
+    statement = beacon.publish(BEACON_ROUND)
+    units = sample_distinct(period["anchor"] + statement["value"] + b"mus",
+                            period["total"], period["sample_size"])
+    cumulative_values = []
+    value_total = 0
+    for value in witness[side]:
+        value_total += value
+        cumulative_values.append(value_total)
+
+    blindings = witness["eta"] if side == "debit" else witness["zeta"]
+    indices, values, blinds, openings, paths = [], [], [], [], []
+    for unit in units:
+        index = bisect.bisect_right(cumulative_values, unit)
+        previous_value = cumulative_values[index - 1] if index else 0
+        indices.append(index)
+        values.extend([unit - previous_value,
+                       cumulative_values[index] - unit - 1])
+        previous_blind = sum(blindings[:index]) % Q
+        current_blind = sum(blindings[:index + 1]) % Q
+        blinds.extend([(-previous_blind) % Q, current_blind])
+        openings.append(dict(
+            amount=witness["amounts"][index],
+            account=witness["accounts"][index],
+            rho=witness["rho"][index], sigma=witness["sigma"][index],
+            debit=witness["debit"][index], eta=witness["eta"][index],
+            credit=witness["credit"][index], zeta=witness["zeta"][index]))
+        paths.append(merkle_path(period["records"], index))
+
+    commitments = [period["sample_bp"].commit(values[i], blinds[i])
+                   for i in range(len(values))]
+    return dict(side=side, beacon=statement, indices=indices,
+                commitments=commitments,
+                proof=period["sample_bp"].prove(values, blinds),
+                openings=openings, paths=paths)
+
+
+def verify_sample(period, presentation, beacon, audit_time=AUDIT_TIME):
+    if not verify_period(period):
+        return False
+    try:
+        header = verify_anchor(period["anchor"], period["firm_public_key"])
+        if not beacon.verify(presentation["beacon"],
+                             header["beacon_round"], audit_time):
+            return False
+        side = presentation["side"]
+        if side not in ("debit", "credit"):
+            return False
+        units = sample_distinct(
+            period["anchor"] + presentation["beacon"]["value"] + b"mus",
+            period["total"], period["sample_size"])
+        if (len(presentation["indices"]) != period["sample_size"]
+                or len(presentation["openings"]) != period["sample_size"]
+                or len(presentation["paths"]) != period["sample_size"]):
+            return False
+        if period["sample_bp"].verify(
+                presentation["commitments"], presentation["proof"])[0] is not True:
+            return False
+
+        cumulative_points = []
+        point_total = mul(period["amount_bp"].G, 0)
+        side_points = period["D"] if side == "debit" else period["K"]
+        for point in side_points:
+            point_total = point_total + point
+            cumulative_points.append(point_total)
+        zero = mul(period["amount_bp"].G, 0)
+        bp = period["amount_bp"]
+        for n, (unit, index, opening, path) in enumerate(zip(
+                units, presentation["indices"], presentation["openings"],
+                presentation["paths"])):
+            if not 0 <= index < period["row_count"]:
+                return False
+            previous_point = cumulative_points[index - 1] if index else zero
+            current_point = cumulative_points[index]
+            D1 = mul(bp.G, unit) + mul(previous_point, Q - 1)
+            D2 = current_point + mul(bp.G, (-(unit + 1)) % Q)
+            if (D1 != presentation["commitments"][2 * n]
+                    or D2 != presentation["commitments"][2 * n + 1]):
+                return False
+            if not verify_path(period["records"][index], path,
+                               header["root"]):
+                return False
+            if (bp.commit(opening["amount"] + OMEGA, opening["rho"])
+                    != period["C"][index]
+                    or bp.commit(opening["account"], opening["sigma"])
+                    != period["A"][index]
+                    or bp.commit(opening["debit"], opening["eta"])
+                    != period["D"][index]
+                    or bp.commit(opening["credit"], opening["zeta"])
+                    != period["K"][index]
+                    or opening["debit"] != max(opening["amount"], 0)
+                    or opening["credit"] != max(-opening["amount"], 0)):
+                return False
+        return True
+    except (KeyError, TypeError, ValueError, IndexError):
+        return False
+
+
+def anchored_understatement(period, witness, signing):
+    """Build the old equal-reduction attack into a freshly signed record set."""
+    changed = copy.copy(period)
+    changed["D"] = list(period["D"])
+    changed["K"] = list(period["K"])
+    changed["records"] = list(period["records"])
+    changed_debit = list(witness["debit"])
+    changed_credit = list(witness["credit"])
+    changed_debit[0] -= 1
+    changed_credit[1] -= 1
+    bp = period["amount_bp"]
+    changed["D"][0] = bp.commit(changed_debit[0], witness["eta"][0])
+    changed["K"][1] = bp.commit(changed_credit[1], witness["zeta"][1])
+    for index in (0, 1):
+        changed["records"][index] = encode_record(
+            period["row_ids"][index], period["encrypted"][index],
+            enc(period["C"][index]), enc(period["A"][index]),
+            enc(changed["D"][index]), enc(changed["K"][index]),
+            period["side_link"][index].to_bytes(32, "big"))
+    root, head = merkle_root(changed["records"]), chain_head(changed["records"])
+    env = encode_anchor_envelope(
+        ENTITY, PERIOD, N, root, head, PREVIOUS_ANCHOR_HASH,
+        CLOSE_TIME, BEACON_ROUND)
+    changed["anchor"] = make_anchor(env, signing["firm"])
+    changed["receipt"] = make_receipt(
+        changed["anchor"], RECEIPT_TIME, signing["custodian"])
+    return changed
+
+
 def main():
-    fixture = make_fixture()
-    sample = prepare_sample(fixture)
-    wrong_indices = list(sample["indices"])
-    wrong_indices[0] = ((wrong_indices[0] + 1) % N)
-    tampered_records = list(fixture["records"])
+    period, witness, signing = make_fixture()
+    beacon = Beacon()
+    sample = prepare_sample(period, witness, beacon)
+    credit_sample = prepare_sample(period, witness, beacon, side="credit")
+    account = prepare_account_balance(period, witness, 1000)
+
+    wrong_sample = dict(sample)
+    wrong_sample["indices"] = list(sample["indices"])
+    wrong_sample["indices"][0] = (wrong_sample["indices"][0] + 1) % N
+    forged_beacon = dict(sample)
+    forged_beacon["beacon"] = dict(sample["beacon"])
+    forged_beacon["beacon"]["value"] = b"\xff" * 32
+    foreign_account = dict(account)
+    foreign_account["indices"] = list(account["indices"])
+    foreign_account["indices"][0] = 1
+    tampered_records = list(period["records"])
     tampered_records[0] += b"x"
-    late_fixture = make_fixture(tau=350)
-    understated_fixture = make_fixture(understate=True)
+    late_receipt = make_receipt(
+        period["anchor"], Beacon.opens_at(BEACON_ROUND), signing["custodian"])
+    understated = anchored_understatement(period, witness, signing)
 
     checks = {
-        "honest end-to-end path accepts": verify_sample(fixture, sample),
-        "one record list reproduces anchor root and chain": verify_period(fixture),
-        "tampered record is rejected": not verify_period(fixture, tampered_records),
-        "past beacon round is rejected": not verify_period(fixture, current_round=200),
-        "anchor after beacon opening time is rejected": not verify_period(late_fixture),
-        "wrong sampled row is rejected": not verify_sample(fixture, sample, wrong_indices),
-        "anchored understated side is rejected": not verify_period(understated_fixture),
+        "honest period accepts after beacon opens": verify_period(period),
+        "honest debit MUS presentation accepts": verify_sample(
+            period, sample, beacon),
+        "honest credit MUS presentation accepts": verify_sample(
+            period, credit_sample, beacon),
+        "honest account-balance presentation accepts": verify_account_balance(
+            period, account),
+        "audit before beacon opening is rejected": not verify_sample(
+            period, sample, beacon, audit_time=250),
+        "forged beacon statement is rejected": not verify_sample(
+            period, forged_beacon, beacon),
+        "tampered record and length are rejected": not verify_period(
+            period, records=tampered_records),
+        "receipt at beacon opening is rejected": not verify_period(
+            period, receipt=late_receipt),
+        "wrong sampled row is rejected": not verify_sample(
+            period, wrong_sample, beacon),
+        "foreign account row is rejected": not verify_account_balance(
+            period, foreign_account),
+        "changed previous anchor is rejected": not verify_period(
+            period, expected_previous_anchor_hash=b"\x00" * 32),
+        "anchored equal understatement is rejected": not verify_period(
+            understated),
+        "understatement violates per-row side link": not verify_side_links(
+            understated),
+        "canonical records are exactly 228 bytes": all(
+            len(record) == P256_RECORD_BYTES for record in period["records"]),
     }
     for label, result in checks.items():
         print("  {:52} : {}".format(label, result))

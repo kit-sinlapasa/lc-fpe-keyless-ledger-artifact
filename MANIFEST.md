@@ -7,8 +7,9 @@ statements about what an earlier measurement got wrong, and a reader should be
 able to see the earlier measurement.
 
 Python files live in `code/` and run from that directory so their module-name
-imports resolve. The independently audited Rust cross-check is isolated in
-`rust/bp_audited/` with its own lockfile and toolchain pin.
+imports resolve. The Rust target-size component built on externally audited
+dependency versions is isolated in `rust/bp_audited/` with its own lockfile
+and toolchain pin; the wrapper itself has not been independently audited.
 
 ---
 
@@ -19,18 +20,19 @@ imports resolve. The independently audited Rust cross-check is isolated in
 | `harness.py` | multi-seed experiment harness; flat Zipf world, `alloc_hamilton`, `cluster_ari`, `ci95` |
 | `harness_tfrs.py` | structured TFRS-style chart of accounts: five categories, seven hub accounts, eighteen transaction archetypes |
 | `lcfpe_impl.py` | FF1 code layer (encrypt and decrypt, validated against the NIST sample values by `ff1_nist_kat.py`), and the Paillier **comparison baseline** for amounts — not the deployed design |
+| `paperb_protocol.py` | shared fixed-width RowID, record, anchor-envelope, firm-anchor and custodian-receipt serializers used by both role-separated Paper B fixtures |
 | `bulletproofs.py` | aggregated Bulletproofs over NIST P-256; also produces Paper B `tab:bp` |
 | `hash_to_curve.py` | RFC 9380 `P256_XMD:SHA-256_SSWU_RO_`, used to derive the Bulletproofs generators. Its `self_test` checks the implementation against the RFC's own vectors, intermediate field elements included, and re-derives the curve parameters instead of trusting them |
 | `bp_rfc9380_check.py` | validates the P-256 measurement implementation: RFC vectors pass, the soundness tests pass under the derived generators, proof sizes are unchanged, and only setup time moves |
-| `paperb_e2e.py` | small in-memory end-to-end fixture: one canonical record list feeds the Merkle root, chain head, signed anchor, beacon sample, interval proof and commitment openings; includes rejection tests |
-| `paperb_durable.py` | durable end-to-end research prototype: encrypted SQLite rows, WAL/FULL durability, atomic close, persisted proofs, custodian receipt, future beacon, restart verification and eight fault tests |
+| `paperb_e2e.py` | small role-separated fixture: one canonical 228-byte record list feeds the Merkle root, chain head, signed anchor, custodian receipt, debit/credit authenticated-beacon samples, interval proofs, account proof and commitment openings; includes timing and attack rejection tests |
+| `paperb_durable.py` | durable role-separated research prototype: encrypted SQLite rows, WAL/FULL durability, atomic close, persisted proofs, exact receipt/anchor formats, public-key-only restart verification and fourteen fault/protocol tests |
 | `a_exact_ml.py` | Paper A Proposition `prop:countopt`: closed-form marginal Bayes rule and exact joint maximum-likelihood assignment for one count-only public context cell; explicitly excludes cross-cell co-occurrence |
-| `rust/bp_audited/` | exact audited dalek dependency versions, reproducible 2019 Rust toolchain, and the full 20,000-row two-batch verifier; checks both proofs, per-row side links, totals, an anchor digest and negative controls on one record set |
+| `rust/bp_audited/` | exact audited dalek dependency versions, reproducible 2019 Rust toolchain, and the target-size 20,000-row range-proof/ledger-consistency component; checks both proofs, per-row side links, totals, a record digest and negative controls on one commitment set |
 | `bp_width_control.py` | control for `tab:bp`: two equal-$nm$ pairs at $n=32$ and $n=64$ give equal proof sizes, with prover times differing by up to 7.1%; evidence for a cost projection, not identical proof contents |
 | `range_configuration.py` | derives the mixed-width full-verifier configuration: $C_i$ at $n_C=64$, $D_i,K_i$ at $n_S=32$, padding, total bit-values and proof sizes |
 | `a_freq_bound.py` | scope check for Proposition 1: computes Delta and KL at the operating point and shows that neither subadditivity nor Pinsker carries a per-draw distance to a period of 20,000 rows |
 | `a_delta_blind.py` | scope check for Proposition 1: tunes chart size until the two generators agree on Delta, then runs the same clustering attack on both. Same Delta, recovery differing by a factor of 81 |
-| `a_impl_audit.py` | correctness audit of the Paper A implementation: LC-FPE round trip, injectivity of the canonical encoding, field-width enforcement, and uniformity of the alias draw |
+| `a_impl_audit.py` | correctness audit of the Paper A implementation: LC-FPE round trip, injectivity, field-width enforcement, alias uniformity, HKDF key separation and the shared 24-byte RowID |
 | `bp_frozen_heart.py` | the Frozen Heart forgery against our own first transcript, which omitted the commitments from the Fiat--Shamir hash. It **must be rejected** by the fixed transcript; it is a negative test, and the flaw it found is reported in Paper B's supplement |
 | `f_ablation.py` | provides `build` / `cluster` / `CELLS` to `f_ablation4.py` and `f_ablation5.py`; its own `__main__` runs the first-pass ablation under the sparse pool |
 
@@ -74,7 +76,7 @@ Run them through `run_all.py`, which records wall-clock and writes output to
 | B | `tab:sampling` (credit side $K_i$, checks (b)/(b′), rejection-sampled units) | `paperb_sampling.py` |
 | B | `tab:class` | `paperb_classification.py` |
 | B | durable end-to-end fault tests | `paperb_durable.py` |
-| B | full target-size verifier on audited dependency | `rust/bp_audited/` -> `results/bp_audited_full.txt` |
+| B | target-size range-proof/consistency component on audited dependency | `rust/bp_audited/` -> `results/bp_audited_full.txt` |
 | B | full-run totals quoted in `tab:bp` | `bp_audited_summary.py` -> `results/bp_audited_summary.txt` |
 | A | correctness | `ff1_nist_kat.py` |
 

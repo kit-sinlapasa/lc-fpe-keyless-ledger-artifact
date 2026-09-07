@@ -7,16 +7,16 @@ BASELINE COMPARISON   ledger = 20,000 rows, 200 accounts, 32 B/row plaintext
   scheme                      B/row  encrypt med/p95 s  trial bal med/p95      close med/p95  keyless
   ----------------------------------------------------------------------------------------------------
   Plaintext                      32        0.000/0.000        0.005/0.005        0.002/0.002      ---
-  AES-256-XTS (whole DB)         32        0.000/0.001        0.004/0.005        0.004/0.005       no
-  AES-256-GCM (per record)       60        0.022/0.025        0.024/0.024        0.024/0.024       no
-  Per-field FF1 (4 digits)       32        3.665/3.734                n/a                n/a       no
-  LC-FPE (ours)                  91      20.181/21.103                n/a        0.054/0.054      yes
+  AES-256-XTS (whole DB)         32        0.000/0.000        0.004/0.005        0.004/0.005       no
+  AES-256-GCM (per record)       60        0.024/0.028        0.025/0.032        0.025/0.032       no
+  Per-field FF1 (4 digits)       32        5.410/5.765                n/a                n/a       no
+  LC-FPE (ours)                  91      21.458/22.190                n/a        0.057/0.060      yes
 
   CHECKS
    XTS decrypt == plaintext, one tweak both ways   : True
    GCM decrypt == plaintext for all rows           : True
    per-field FF1 round trip (spot-checked)         : True
-   LC-FPE full decrypt round trip, 20,000 rows        : True  (4.4 s)
+   LC-FPE full decrypt round trip, 20,000 rows        : True  (4.7 s)
    LC-FPE keyless close  sum C == N*Omega*G + R*H  : True
    amount ciphertext moved to another row          : False  (expected False)
    commitment replaced, ciphertexts untouched      : True  (expected True)
@@ -25,6 +25,6 @@ BASELINE COMPARISON   ledger = 20,000 rows, 200 accounts, 32 B/row plaintext
    RowID registry rejects a duplicate              : True
    LC-FPE bytes/row = 9 fmt + 33 C + 24 amt AEAD + 25 text AEAD (nonces derived)
 
-  LC-FPE encrypt 20.2 s median = 991 rows/s; 898x AES-GCM; 2.8x plaintext bytes
-  LaTeX rows written to ..\results\tab_base_rows.tex
+  LC-FPE encrypt 21.5 s median = 932 rows/s; 907x AES-GCM; 2.8x plaintext bytes
+  LaTeX rows written to results\tab_base_rows.tex
 done

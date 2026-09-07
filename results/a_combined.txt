@@ -36,7 +36,7 @@ PAPER A -- COMBINED ADVERSARY on the conditional domain (deployed observable)
            oracle control (uses test labels): 32.556%
 
   control: the combined attacker against lifting WITHOUT FPAE (k(a)=1), realistic pool, 5x3
-  combined, no FPAE: 61.6% +- 0.4%   (rank attack in tab:lega: 64.4%)
+  combined, no FPAE: 61.6% +- 0.4%   (rank attack in tab:lega: 64.3%)
 
   These are contrasts of the specified heuristics with context-only MAP.
   A rational attacker can ignore ciphertext; a negative contrast does not
